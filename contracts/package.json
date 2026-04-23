@@ -1,0 +1,21 @@
+{
+  "name": "usdt.z-contracts",
+  "version": "1.0.0",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:bsc": "hardhat run scripts/deploy.js --network bsc",
+    "deploy:testnet": "hardhat run scripts/deploy.js --network bscTestnet",
+    "deploy:localhost": "hardhat run scripts/deploy.js --network localhost"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-ethers": "^3.1.3",
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "@nomicfoundation/hardhat-verify": "^3.0.14",
+    "@openzeppelin/contracts": "^4.9.3",
+    "dotenv": "^16.3.1",
+    "hardhat": "^2.17.0",
+    "typescript": "^5.2.0"
+  }
+}

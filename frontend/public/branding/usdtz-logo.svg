@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0f1a"/>
+      <stop offset="100%" style="stop-color:#141b2d"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffd700"/>
+      <stop offset="50%" style="stop-color:#f5a623"/>
+      <stop offset="100%" style="stop-color:#ff8c00"/>
+    </linearGradient>
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffd700"/>
+      <stop offset="100%" style="stop-color:#b8860b"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Outer circle (gold rim) -->
+  <circle cx="128" cy="128" r="124" fill="url(#rimGrad)"/>
+
+  <!-- Inner dark background -->
+  <circle cx="128" cy="128" r="114" fill="url(#bgGrad)"/>
+
+  <!-- Inner gold ring -->
+  <circle cx="128" cy="128" r="108" fill="none" stroke="url(#goldGrad)" stroke-width="2" opacity="0.4"/>
+
+  <!-- Dollar sign with integrated Z -->
+  <g filter="url(#glow)">
+    <!-- Top bar of $ -->
+    <rect x="100" y="58" width="56" height="8" rx="4" fill="url(#goldGrad)"/>
+    <!-- S-curve top -->
+    <path d="M 148 66 C 148 66, 152 80, 148 90 C 144 100, 108 98, 104 108"
+          stroke="url(#goldGrad)" stroke-width="18" stroke-linecap="round" fill="none"/>
+    <!-- S-curve bottom -->
+    <path d="M 104 108 C 100 118, 104 138, 108 148 C 112 158, 148 156, 152 146"
+          stroke="url(#goldGrad)" stroke-width="18" stroke-linecap="round" fill="none"/>
+    <!-- Z slash through middle -->
+    <line x1="112" y1="118" x2="144" y2="138" stroke="#0a0f1a" stroke-width="6" stroke-linecap="round"/>
+    <line x1="112" y1="118" x2="144" y2="118" stroke="url(#goldGrad)" stroke-width="4" stroke-linecap="round"/>
+    <line x1="112" y1="138" x2="144" y2="138" stroke="url(#goldGrad)" stroke-width="4" stroke-linecap="round"/>
+    <line x1="144" y1="118" x2="112" y2="138" stroke="url(#goldGrad)" stroke-width="4" stroke-linecap="round"/>
+    <!-- Bottom bar of $ -->
+    <rect x="100" y="188" width="56" height="8" rx="4" fill="url(#goldGrad)"/>
+    <!-- Vertical line through $ -->
+    <rect x="124" y="48" width="8" height="158" rx="4" fill="url(#goldGrad)"/>
+  </g>
+
+  <!-- Subtle .z text -->
+  <text x="172" y="185" font-family="Arial, sans-serif" font-weight="bold" font-size="28" fill="url(#goldGrad)" opacity="0.8">.z</text>
+</svg>

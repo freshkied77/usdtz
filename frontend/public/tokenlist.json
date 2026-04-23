@@ -1,0 +1,57 @@
+{
+  "name": "USDTZ Token List",
+  "logoURI": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MDAgNTAwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcD0iIzFhMWEyZSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcD0iIzE2MjEzZSIvPjwvbGluZWFyR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJ0b2tlbkdyYWQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3A9IiNmZmQ3MDAiLz48c3RvcCBvZmZzZXQ9IjUwJSIgc3RvcD0iI2ZmYjM0NyIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcD0iI2ZmOGMwMCIvPjwvbGluZWFyR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJzaGllbGRHcmFkIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjAlJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3A9IiM0ZmFjZmUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3A9IiMwMGYyZmUiLz48L2xpbmVhckdyYWRpZW50PjxmaWx0ZXIgaWQ9Imdsb3ciPjxlRmNiIGd4bk9mZnNldD0iMyIgcmVzdWx0PSJjb2xvcmVkQmx1ciIvPjxlTWVyZ2U+PGZlTWVyZ2VOb2RlIGluPSJjb2xvcmVkQmx1ciIvPjxlTWVyZ2VOb2RlIGluPSJTb3VyY2VHcmFwaGljIi8+PC9lTWVyZ2U+PC9maWx0ZXI+PC9kZWZzPj48cmVjdCB3aWR0aD0iNTAwIiBoZWlnaHQ9IjUwMCIgcng9IjYwIiBmaWxsPSJ1cmwoI2JnR3JhZCIvPjxwYXRoIGQ9Ik0yNTAgODAgTDM3MCAxNDAgTDM3MCAyODAgTDI1MCAzODAgTDEzMCAyODAgTDEzMCAxNDAgWiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI3NoaWVsZEdyYWQpIiBzdHJva2Utd2lkdGg9IjQiIG9wYWNpdHk9IjAuMyIvPjxlbGxpcHNlIGN4PSIyNTAiIGN5PSIyMDAiIHI9IjcwIiBmaWxsPSJub25lIiBzdHJva2U9InVybCgjdG9rZW5HcmFkKSIgc3Ryb2tlLXdpZHRoPSI2IiBmaWx0ZXI9InVybCgjZ2xvdykiLz48dGV4dCB4PSIyNTAiIHk9IjE4NSIgZm9udC1mYW1pbHk9IkFyaWFsIEJsYWNrLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjI4IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iI2ZmZmZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+VVNURDwvdGV4dD48dGV4dCB4PSIyNTAiIHk9IjIxNSIgZm9udC1mYW1pbHk9IkFyaWFsIEJsYWNrLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjIyIiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0idXJsKCN0b2tlbkdyYWQpIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj4uejwvdGV4dD48L3N2Zz4=",
+  "timestamp": "2026-04-22T00:00:00+00:00",
+  "version": {
+    "major": 2,
+    "minor": 0,
+    "patch": 0
+  },
+  "keywords": ["usdtz", "stablecoin", "defi", "privacy", "zedxion", "bnb-chain"],
+  "tokens": [
+    {
+      "chainId": 56,
+      "address": "0xF682dfB3A4742071c280E7A77f4aE6d4E8F86665",
+      "name": "USDTZ Stablecoin",
+      "symbol": "USDTZ",
+      "decimals": 18,
+      "logoURI": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MDAgNTAwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3A9IiMxYTFhMmUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3A9IiMxNjIxM2UiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0idG9rZW5HcmFkIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wPSIjZmZkNzAwIi8+PHN0b3Agb2Zmc2V0PSI1MCUiIHN0b3A9IiNmZmIzNDciLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3A9IiNmZjhjMDAiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0ic2hpZWxkR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3A9IiM0ZmFjZmUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3A9IiMwMGYyZmUiLz48L2xpbmVhckdyYWRpZW50PjxmaWx0ZXIgaWQ9Imdsb3ciPjxlRmNiIGd4bk9mZnNldD0iMyIgcmVzdWx0PSJjb2xvcmVkQmx1ciIvPjxlTWVyZ2U+PGZlTWVyZ2VOb2RlIGluPSJjb2xvcmVkQmx1ciIvPjxlTWVyZ2VOb2RlIGluPSJTb3VyY2VHcmFwaGljIi8+PC9lTWVyZ2U+PC9maWx0ZXI+PC9kZWZzPj48cmVjdCB3aWR0aD0iNTAwIiBoZWlnaHQ9IjUwMCIgcng9IjYwIiBmaWxsPSJ1cmwoI2JnR3JhZCIvPjxwYXRoIGQ9Ik0yNTAgODAgTDM3MCAxNDAgTDM3MCAyODAgTDI1MCAzODAgTDEzMCAyODAgTDEzMCAxNDAgWiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI3NoaWVsZEdyYWQpIiBzdHJva2Utd2lkdGg9IjQiIG9wYWNpdHk9IjAuMyIvPjxlbGxpcHNlIGN4PSIyNTAiIGN5PSIyMDAiIHI9IjcwIiBmaWxsPSJub25lIiBzdHJva2U9InVybCgjdG9rZW5HcmFkKSIgc3Ryb2tlLXdpZHRoPSI2IiBmaWx0ZXI9InVybCgjZ2xvdykiLz48dGV4dCB4PSIyNTAiIHk9IjE4NSIgZm9udC1mYW1pbHk9IkFyaWFsIEJsYWNrLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjI4IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iI2ZmZmZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+VVNURDwvdGV4dD48dGV4dCB4PSIyNTAiIHk9IjIxNSIgZm9udC1mYW1pbHk9IkFyaWFsIEJsYWNrLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjIyIiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0idXJsKCN0b2tlbkdyYWQpIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj4uejwvdGV4dD48L3N2Zz4=",
+      "tags": ["stablecoin", "defi", "algorithmic"],
+      "extensions": {
+        "website": "https://usdt.z",
+        "description": "Next-generation algorithmic stablecoin with ZK privacy and AI-powered risk management"
+      }
+    },
+    {
+      "chainId": 9000,
+      "address": "0x0000000000000000000000000000000000000001",
+      "name": "Zedxion",
+      "symbol": "ZEDX",
+      "decimals": 18,
+      "logoURI": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MDAgNTAwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcD0iIzFhMWEyZSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcD0iIzE2MjEzZSIvPjwvbGluZWFyR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJ6ZWR4R3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3A9IiMwMGYyZmUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3A9IiMzNmM5ZmYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iNTAwIiBoZWlnaHQ9IjUwMCIgcng9IjYwIiBmaWxsPSJ1cmwoI2JnR3JhZCIvPjxlbGxpcHNlIGN4PSIyNTAiIGN5PSIyNTAiIHI9IjE1MCIgZmlsbD0idXJsKCN6ZWR4R3JhZCkiIG9wYWNpdHk9IjAuMiIvPjxlbGxpcHNlIGN4PSIyNTAiIGN5PSIyNTAiIHI9IjEwMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI3plZHhHcmFkKSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHRleHQgeD0iMjUwIiB5PSIyMzUiIGZvbnQtZmFtaWx5PSJBcmlhbCBCbGFjaywgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIzMiIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlpFRFg8L3RleHQ+PHNlY3Rpb24geD0iMjUwIiB5PSIyNzAiIHdpZHRoPSIxMjAiIGhlaWdodD0iNCIgcng9IjIiIGZpbGw9InVybCgjemVkdkdyYWQpIi8+PC9zdmc+",
+      "tags": ["chain", "governance"]
+    }
+  ],
+  "tags": {
+    "stablecoin": {
+      "name": "Stablecoin",
+      "description": "Tokens pegged to fiat currency"
+    },
+    "defi": {
+      "name": "DeFi",
+      "description": "Decentralized Finance protocols"
+    },
+    "algorithmic": {
+      "name": "Algorithmic",
+      "description": "Algorithmic stablecoin protocols"
+    },
+    "chain": {
+      "name": "Chain",
+      "description": "Native chain tokens"
+    },
+    "governance": {
+      "name": "Governance",
+      "description": "Governance tokens"
+    }
+  }
+}

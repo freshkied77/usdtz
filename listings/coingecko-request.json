@@ -1,0 +1,36 @@
+{
+  "id": "usdtz",
+  "symbol": "USDTZ",
+  "name": "USDTZ",
+  "description": "USDTZ is an algorithmic stablecoin on BNB Chain with Chainlink oracle integration, automated rebase mechanism, cross-chain bridge (Zedx), zero-knowledge privacy pools, prediction markets, and liquidity mining. It maintains a $1 USD peg through algorithmic supply adjustments, collateral-backed minting/redemption, and a stabilization fund.",
+  "asset_platform_id": "binance-smart-chain",
+  "contract_address": "0xF682dfB3A4742071c280E7A77f4aE6d4E8F86665",
+
+  "links": {
+    "homepage": ["https://frontend-green-lab-tech.vercel.app"],
+    "blockchain_site": [
+      "https://bscscan.com/token/0xF682dfB3A4742071c280E7A77f4aE6d4E8F86665"
+    ],
+    "repos_url": {
+      "github": []
+    }
+  },
+
+  "image": {
+    "large": "logo/usdtz_logo_512.png"
+  },
+
+  "detail_platforms": {
+    "binance-smart-chain": {
+      "contract_address": "0xF682dfB3A4742071c280E7A77f4aE6d4E8F86665",
+      "decimal_place": 18
+    }
+  },
+
+  "categories": [
+    "Stablecoin",
+    "Algorithmic Stablecoin",
+    "BNB Chain Ecosystem",
+    "DeFi"
+  ]
+}

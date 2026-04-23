@@ -1,0 +1,8 @@
+{
+  "name": "USDTZ",
+  "symbol": "USDTZ",
+  "address": "0xF682dfB3A4742071c280E7A77f4aE6d4E8F86665",
+  "chainId": 56,
+  "decimals": 18,
+  "logoURI": "https://frontend-green-lab-tech.vercel.app/branding/usdtz-256.png"
+}

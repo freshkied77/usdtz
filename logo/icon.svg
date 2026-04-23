@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="tokenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffd700"/>
+      <stop offset="100%" style="stop-color:#ff8c00"/>
+    </linearGradient>
+  </defs>
+  
+  <rect width="64" height="64" rx="12" fill="#1a1a2e"/>
+  
+  <circle cx="32" cy="24" r="16" fill="none" stroke="url(#tokenGrad)" stroke-width="3"/>
+  
+  <text x="32" y="22" font-family="Arial Black, sans-serif" font-size="10" font-weight="bold" fill="#ffffff" text-anchor="middle">USDT</text>
+  <text x="32" y="32" font-family="Arial Black, sans-serif" font-size="8" font-weight="bold" fill="url(#tokenGrad)" text-anchor="middle">.z</text>
+  
+  <path d="M20 44 Q32 52 44 44" fill="none" stroke="url(#tokenGrad)" stroke-width="2" stroke-linecap="round"/>
+</svg>

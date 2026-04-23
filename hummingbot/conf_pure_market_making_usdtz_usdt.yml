@@ -1,0 +1,50 @@
+###############################################
+# USDTZ/USDT Pure Market Making on PancakeSwap
+# Use this once a USDTZ/USDT pair is created
+###############################################
+
+template_version: 22
+
+strategy: pure_market_making
+
+# Exchange and trading pair
+exchange: pancakeswap
+market: USDTZ-USDT
+
+# --- Order Amounts ---
+order_amount: 100         # $100 USDTZ per order (stablecoin pair = lower risk)
+order_levels: 2           # 2 orders on each side
+order_level_amount: 50
+order_level_spread: 0.002
+
+# --- Spreads ---
+# Very tight for stablecoin-to-stablecoin pair
+bid_spread: 0.001         # 0.1% below (buy at $0.999)
+ask_spread: 0.001         # 0.1% above (sell at $1.001)
+
+# --- Inventory Management ---
+inventory_skew_enabled: true
+inventory_target_base_pct: 50
+inventory_range_multiplier: 1.5
+
+# --- Order Refresh ---
+order_refresh_time: 60          # Refresh every 60s (stable pair = less urgency)
+max_order_age: 600
+filled_order_delay: 5
+
+# --- Safety ---
+kill_switch_enabled: true
+kill_switch_rate: -3.0          # Tighter stop for stablecoin pair
+
+# --- Minimum Spread ---
+minimum_spread: 0.0005         # 0.05% minimum for stablecoin pair
+
+# --- Hanging Orders ---
+hanging_orders_enabled: true
+hanging_orders_cancel_pct: 2.0
+
+# --- Ping Pong ---
+ping_pong_enabled: true
+
+# --- Fees ---
+add_transaction_costs: true

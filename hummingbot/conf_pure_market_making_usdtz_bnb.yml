@@ -1,0 +1,58 @@
+###############################################
+# USDTZ/WBNB Pure Market Making on PancakeSwap
+###############################################
+
+template_version: 22
+
+strategy: pure_market_making
+
+# Exchange and trading pair
+exchange: pancakeswap
+market: USDTZ-WBNB
+
+# --- Order Amounts ---
+# Start small — increase once profitable
+order_amount: 50          # $50 USDTZ per order
+order_levels: 3           # 3 orders on each side
+order_level_amount: 25    # Each level adds $25
+order_level_spread: 0.005 # 0.5% between levels
+
+# --- Spreads ---
+# Tight spread since USDTZ is a stablecoin pegged to $1
+bid_spread: 0.003         # 0.3% below mid price (buy at $0.997)
+ask_spread: 0.003         # 0.3% above mid price (sell at $1.003)
+
+# --- Inventory Management ---
+inventory_skew_enabled: true
+inventory_target_base_pct: 50   # Target 50% USDTZ / 50% BNB
+inventory_range_multiplier: 2.0
+
+# --- Order Refresh ---
+order_refresh_time: 30          # Refresh orders every 30 seconds
+max_order_age: 300              # Cancel orders older than 5 minutes
+filled_order_delay: 10          # Wait 10s after fill before new order
+
+# --- Safety Features ---
+kill_switch_enabled: true
+kill_switch_rate: -5.0          # Stop if PnL drops below -5%
+
+# --- Minimum Spread Protection ---
+minimum_spread: 0.001           # Never place orders tighter than 0.1%
+
+# --- Price Source ---
+# Use external oracle for more stable reference price
+price_source: external_market
+price_source_exchange: binance
+price_source_market: BNB-USDT
+price_source_custom_api: null
+
+# --- Hanging Orders ---
+hanging_orders_enabled: true
+hanging_orders_cancel_pct: 5.0  # Cancel hanging orders if 5% from mid
+
+# --- Ping Pong ---
+ping_pong_enabled: true         # Alternate buy/sell for efficiency
+
+# --- Fees ---
+# PancakeSwap V2 fees: 0.25%
+add_transaction_costs: true     # Factor in gas + DEX fees

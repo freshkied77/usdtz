@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD700"/>
+      <stop offset="100%" style="stop-color:#F5A623"/>
+    </linearGradient>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0D1421"/>
+      <stop offset="100%" style="stop-color:#151E30"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Gold outer ring -->
+  <circle cx="128" cy="128" r="128" fill="url(#gold)"/>
+  <!-- Dark inner -->
+  <circle cx="128" cy="128" r="118" fill="url(#bg)"/>
+  <!-- Thin inner gold accent ring -->
+  <circle cx="128" cy="128" r="110" fill="none" stroke="#FFD700" stroke-width="1.5" opacity="0.3"/>
+
+  <!-- $ vertical bar -->
+  <rect x="122" y="52" width="12" height="152" rx="6" fill="url(#gold)"/>
+
+  <!-- Top curve of S -->
+  <path d="M 155 76 C 155 62, 145 56, 128 56 C 111 56, 97 64, 97 80 C 97 96, 111 102, 128 108"
+        stroke="url(#gold)" stroke-width="16" stroke-linecap="round" fill="none"/>
+
+  <!-- Bottom curve of S -->
+  <path d="M 128 148 C 145 154, 159 160, 159 176 C 159 192, 145 200, 128 200 C 111 200, 101 194, 101 180"
+        stroke="url(#gold)" stroke-width="16" stroke-linecap="round" fill="none"/>
+
+  <!-- Z overlay in the center gap -->
+  <g opacity="0.95">
+    <line x1="108" y1="112" x2="148" y2="112" stroke="#FFD700" stroke-width="5" stroke-linecap="round"/>
+    <line x1="148" y1="112" x2="108" y2="144" stroke="#FFD700" stroke-width="5" stroke-linecap="round"/>
+    <line x1="108" y1="144" x2="148" y2="144" stroke="#FFD700" stroke-width="5" stroke-linecap="round"/>
+  </g>
+</svg>

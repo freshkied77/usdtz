@@ -1,0 +1,57 @@
+{
+  "project": "USDTZ",
+  "symbol": "USDTZ",
+  "one_liner": "Algorithmic stablecoin on BNB Chain with Chainlink oracles, privacy pools, and cross-chain bridge",
+
+  "category": "Stablecoin",
+  "subcategory": "Algorithmic",
+
+  "contract_platform": "BNB Smart Chain (BEP-20)",
+  "contract_address": "0xF682dfB3A4742071c280E7A77f4aE6d4E8F86665",
+  "decimals": 18,
+
+  "total_supply": "1,000,000,000",
+  "max_supply": "1,000,000,000",
+  "circulating_supply": "400,000,000",
+
+  "launch_date": "2026-04-16",
+
+  "project_description": "USDTZ is an advanced algorithmic stablecoin deployed on BNB Chain. It uses Chainlink price oracles for accurate BNB/USD pricing and an automated rebase mechanism to maintain its $1 USD peg. The protocol features a full DeFi ecosystem including:\n\n- Collateral-backed minting and redemption (150% collateral ratio)\n- Automated rebase with circuit breaker protection\n- StabilizationFund for peg defense through arbitrage\n- Cross-chain bridge (ZedxBridge) supporting BNB, Ethereum, and Polygon\n- Zero-knowledge privacy pools with Merkle tree verification\n- Prediction markets denominated in USDTZ\n- Liquidity mining with reward distribution\n- Referral system for user growth\n- Fiat on-ramp for direct USD entry\n\nAll 13 smart contracts are verified on BscScan with full source code transparency.",
+
+  "website": "https://frontend-green-lab-tech.vercel.app",
+  "explorer": "https://bscscan.com/token/0xF682dfB3A4742071c280E7A77f4aE6d4E8F86665",
+
+  "dex_listing": {
+    "exchange": "PancakeSwap V2",
+    "pair": "USDTZ/WBNB",
+    "pair_address": "0xbAe7EAF2078f053857b472c2cAE4F63D0086b89F",
+    "chain": "BNB Smart Chain",
+    "chain_id": 56
+  },
+
+  "token_distribution": {
+    "liquidity_manager": "50% (500,000,000 USDTZ)",
+    "stabilization_fund": "10% (100,000,000 USDTZ - split across v1 and v2)",
+    "cross_chain_bridge": "5% (50,000,000 USDTZ)",
+    "deployer_treasury": "35% (350,000,000 USDTZ)"
+  },
+
+  "smart_contracts": {
+    "USDTZChainlink": "0xF682dfB3A4742071c280E7A77f4aE6d4E8F86665",
+    "PoolManager": "0x3c91AF7Cf1f5c44d32A6fF9222a3Ed72845d8E86",
+    "StabilizationFund": "0x23b8450530Be2A3f19Ae2FDD26cA3491C4De192D",
+    "LiquidityManager": "0x6C5212B7D40154ee367f49Dc05d5C7659a544800",
+    "LiquidityVault": "0xdfbe58825699E42D786EBf9B7Ba8F6ab03C1C759",
+    "ZedxBridge": "0x54C68aB92134167A42d8fF5e46bB1a566fF89BAb",
+    "PrivacyPool": "0xEC41C164E8ED73a915F3282AF6D6E0A8fbEE18e9",
+    "PrivacyRegistry": "0x24348f52f4b981869aDdF9A41f08d5c4dAb72873",
+    "LiquidityMining": "0xD78096854c994741D188B53d3a5C6ef2a877bb1d",
+    "PredictionMarket": "0x7991e75bc6505F3035335a069050d9ccB0a23555",
+    "ReferralSystem": "0x2418D1DaC19fF54A343b605eaA247A4093d4aab2",
+    "FiatOnRamp": "0x21b37aA4349EAC49dF2985248a2E4DC2faE5c44a",
+    "MerkleTreeVerification": "0xA1097381949cAC9513f8FeFBda905364E0281D46"
+  },
+
+  "audit_status": "Contracts verified on BscScan with full source code",
+  "logo": "logo/usdtz_logo_512.png"
+}
