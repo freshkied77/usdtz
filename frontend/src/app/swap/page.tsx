@@ -215,18 +215,44 @@ export default function SwapPage() {
     return () => clearInterval(interval)
   }, [])
 
-  // Calculate output amount based on live prices
+  // Calculate output amount — try on-chain quote first, fallback to CoinGecko prices
   useEffect(() => {
-    if (!fromToken || !toToken || !debouncedFromAmount || !tokenPrices[fromToken.symbol] || !tokenPrices[toToken.symbol]) {
+    if (!fromToken || !toToken || !debouncedFromAmount || parseFloat(debouncedFromAmount) <= 0) {
       setToAmount('')
       return
     }
-    
-    const fromPrice = tokenPrices[fromToken.symbol]
-    const toPrice = tokenPrices[toToken.symbol]
-    const fromValue = parseFloat(debouncedFromAmount) * fromPrice
-    const toValue = fromValue / toPrice
-    setToAmount(toValue.toFixed(6))
+
+    let cancelled = false
+    const getQuote = async () => {
+      const wbnb = USDTZ_CONFIG.tokens.wbnb as `0x${string}`
+      const fromAddr = fromToken.symbol === 'BNB' ? wbnb : fromToken.address
+      const toAddr = toToken.symbol === 'BNB' ? wbnb : toToken.address
+      const amountIn = parseUnits(debouncedFromAmount, fromToken.decimals)
+
+      try {
+        const path = await findBestPath(fromAddr, toAddr, amountIn)
+        const amounts = await bscClient.readContract({
+          address: ROUTER,
+          abi: PANCAKE_ROUTER_ABI,
+          functionName: 'getAmountsOut',
+          args: [amountIn, path],
+        })
+        if (!cancelled) {
+          const outAmount = (amounts as bigint[])[path.length - 1]
+          setToAmount(formatUnits(outAmount, toToken.decimals))
+        }
+      } catch {
+        // Fallback to CoinGecko price estimate
+        if (!cancelled && tokenPrices[fromToken.symbol] && tokenPrices[toToken.symbol]) {
+          const fromPrice = tokenPrices[fromToken.symbol]
+          const toPrice = tokenPrices[toToken.symbol]
+          const fromValue = parseFloat(debouncedFromAmount) * fromPrice
+          setToAmount((fromValue / toPrice).toFixed(6))
+        }
+      }
+    }
+    getQuote()
+    return () => { cancelled = true }
   }, [debouncedFromAmount, fromToken, toToken, tokenPrices])
 
   // Check allowance
@@ -279,6 +305,47 @@ export default function SwapPage() {
 
   const [swapError, setSwapError] = useState('')
 
+  const findBestPath = async (fromAddr: `0x${string}`, toAddr: `0x${string}`, amountIn: bigint): Promise<`0x${string}`[]> => {
+    const wbnb = USDTZ_CONFIG.tokens.wbnb as `0x${string}`
+    const usdt = USDTZ_CONFIG.tokens.usdt as `0x${string}`
+    const busd = USDTZ_CONFIG.tokens.busd as `0x${string}`
+
+    const candidates: `0x${string}`[][] = [
+      [fromAddr, toAddr],
+      [fromAddr, wbnb, toAddr],
+      [fromAddr, usdt, toAddr],
+      [fromAddr, busd, toAddr],
+      [fromAddr, wbnb, usdt, toAddr],
+    ].filter(p => {
+      const unique = new Set(p.map(a => a.toLowerCase()))
+      return unique.size === p.length
+    }) as `0x${string}`[][]
+
+    let bestPath = candidates[0]
+    let bestOut = BigInt(0)
+
+    for (const path of candidates) {
+      try {
+        const amounts = await bscClient.readContract({
+          address: ROUTER,
+          abi: PANCAKE_ROUTER_ABI,
+          functionName: 'getAmountsOut',
+          args: [amountIn, path],
+        })
+        const out = (amounts as bigint[])[path.length - 1]
+        if (out > bestOut) {
+          bestOut = out
+          bestPath = path
+        }
+      } catch {
+        // path has no liquidity, skip
+      }
+    }
+
+    if (bestOut === BigInt(0)) throw new Error('No liquidity found for this pair')
+    return bestPath
+  }
+
   const handleSwap = async () => {
     if (!fromToken || !toToken || !fromAmount || !address || !publicClient || !walletClient) return
     setIsSwapping(true)
@@ -289,22 +356,42 @@ export default function SwapPage() {
       const isToNative = toToken.symbol === 'BNB'
       const wbnb = USDTZ_CONFIG.tokens.wbnb as `0x${string}`
 
-      // Build path
+      const amountIn = parseUnits(fromAmount, fromToken.decimals)
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE)
+
+      // Build path: native cases are simple, token-to-token finds best route
       let path: `0x${string}`[]
       if (isFromNative) {
-        path = [wbnb, toToken.address]
+        path = await findBestPath(wbnb, toToken.address, amountIn)
       } else if (isToNative) {
-        path = [fromToken.address, wbnb]
+        path = await findBestPath(fromToken.address, wbnb, amountIn)
       } else {
-        path = [fromToken.address, toToken.address]
+        path = await findBestPath(fromToken.address, toToken.address, amountIn)
       }
 
-      const amountIn = parseUnits(fromAmount, fromToken.decimals)
-      const minAmountOut = parseUnits(
-        (parseFloat(toAmount) * (1 - parseFloat(slippage) / 100)).toFixed(6),
-        toToken.decimals
-      )
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE)
+      // Get actual expected output from the router
+      const amounts = await bscClient.readContract({
+        address: ROUTER,
+        abi: PANCAKE_ROUTER_ABI,
+        functionName: 'getAmountsOut',
+        args: [amountIn, path],
+      })
+      const expectedOut = (amounts as bigint[])[path.length - 1]
+      const slippageBps = BigInt(Math.floor(parseFloat(slippage) * 100))
+      const minAmountOut = expectedOut - (expectedOut * slippageBps / BigInt(10000))
+
+      // Approve token spend for non-native swaps
+      if (!isFromNative) {
+        const { request: approveReq } = await publicClient.simulateContract({
+          address: fromToken.address,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [ROUTER, amountIn],
+          account: address,
+        })
+        const approveTx = await walletClient.writeContract(approveReq)
+        await publicClient.waitForTransactionReceipt({ hash: approveTx })
+      }
 
       let hash: `0x${string}`
       if (isFromNative) {
