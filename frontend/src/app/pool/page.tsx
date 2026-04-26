@@ -22,6 +22,7 @@ import { buildTokenList, type TokenData } from '@/lib/api/coingecko'
 const POOL_MANAGER = USDTZ_CONFIG.contracts.poolManager as `0x${string}`
 const LIQUIDITY_MANAGER = USDTZ_CONFIG.contracts.liquidityManager as `0x${string}`
 const USDTZ_ADDRESS = USDTZ_CONFIG.contracts.usdtz as `0x${string}`
+const ROUTER = USDTZ_CONFIG.contracts.router as `0x${string}`
 
 const ERC20_APPROVE_ABI = [
   {
@@ -32,6 +33,47 @@ const ERC20_APPROVE_ABI = [
     name: 'approve',
     outputs: [{ name: '', type: 'bool' }],
     stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const
+
+const ROUTER_ADD_LIQUIDITY_ABI = [
+  {
+    inputs: [
+      { name: 'tokenA', type: 'address' },
+      { name: 'tokenB', type: 'address' },
+      { name: 'amountADesired', type: 'uint256' },
+      { name: 'amountBDesired', type: 'uint256' },
+      { name: 'amountAMin', type: 'uint256' },
+      { name: 'amountBMin', type: 'uint256' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    name: 'addLiquidity',
+    outputs: [
+      { name: 'amountA', type: 'uint256' },
+      { name: 'amountB', type: 'uint256' },
+      { name: 'liquidity', type: 'uint256' },
+    ],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'amountTokenDesired', type: 'uint256' },
+      { name: 'amountTokenMin', type: 'uint256' },
+      { name: 'amountETHMin', type: 'uint256' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    name: 'addLiquidityETH',
+    outputs: [
+      { name: 'amountToken', type: 'uint256' },
+      { name: 'amountETH', type: 'uint256' },
+      { name: 'liquidity', type: 'uint256' },
+    ],
+    stateMutability: 'payable',
     type: 'function',
   },
 ] as const
@@ -85,29 +127,72 @@ export default function PoolPage() {
     setTxHash(null)
     try {
       const amount = parseEther(liquidityAmount)
-      const { request: approveReq } = await publicClient.simulateContract({
-        address: USDTZ_ADDRESS,
-        abi: ERC20_APPROVE_ABI,
-        functionName: 'approve',
-        args: [POOL_MANAGER, amount],
-        account: address,
-      })
-      await walletClient.writeContract(approveReq)
+      const tokenA = pool.token0Address as `0x${string}`
+      const tokenB = USDTZ_ADDRESS
+      const wbnb = USDTZ_CONFIG.tokens.wbnb as `0x${string}`
+      const isNative = tokenA.toLowerCase() === wbnb.toLowerCase()
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 20 * 60)
+      const minAmount = amount * BigInt(95) / BigInt(100) // 5% slippage
 
-      const { request } = await publicClient.simulateContract({
-        address: POOL_MANAGER,
-        abi: ABIS.PoolManager,
-        functionName: 'deposit',
-        args: [pool.token0Address as `0x${string}`, amount],
-        account: address,
-      })
-      const hash = await walletClient.writeContract(request)
-      setTxHash(hash)
+      if (isNative) {
+        // addLiquidityETH: approve USDTZ, send BNB as value
+        const { request: approveReq } = await publicClient.simulateContract({
+          address: USDTZ_ADDRESS,
+          abi: ERC20_APPROVE_ABI,
+          functionName: 'approve',
+          args: [ROUTER, amount],
+          account: address,
+        })
+        const approveTx = await walletClient.writeContract(approveReq)
+        await publicClient.waitForTransactionReceipt({ hash: approveTx })
+
+        const { request } = await publicClient.simulateContract({
+          address: ROUTER,
+          abi: ROUTER_ADD_LIQUIDITY_ABI,
+          functionName: 'addLiquidityETH',
+          args: [USDTZ_ADDRESS, amount, minAmount, minAmount, address, deadline],
+          value: amount,
+          account: address,
+        })
+        const hash = await walletClient.writeContract(request)
+        setTxHash(hash)
+      } else {
+        // addLiquidity: approve both tokens
+        const { request: approveA } = await publicClient.simulateContract({
+          address: tokenA,
+          abi: ERC20_APPROVE_ABI,
+          functionName: 'approve',
+          args: [ROUTER, amount],
+          account: address,
+        })
+        const txA = await walletClient.writeContract(approveA)
+        await publicClient.waitForTransactionReceipt({ hash: txA })
+
+        const { request: approveB } = await publicClient.simulateContract({
+          address: USDTZ_ADDRESS,
+          abi: ERC20_APPROVE_ABI,
+          functionName: 'approve',
+          args: [ROUTER, amount],
+          account: address,
+        })
+        const txB = await walletClient.writeContract(approveB)
+        await publicClient.waitForTransactionReceipt({ hash: txB })
+
+        const { request } = await publicClient.simulateContract({
+          address: ROUTER,
+          abi: ROUTER_ADD_LIQUIDITY_ABI,
+          functionName: 'addLiquidity',
+          args: [tokenA, tokenB, amount, amount, minAmount, minAmount, address, deadline],
+          account: address,
+        })
+        const hash = await walletClient.writeContract(request)
+        setTxHash(hash)
+      }
       setShowAddLiquidity(null)
       setLiquidityAmount('')
     } catch (err: any) {
       console.error('Add liquidity failed:', err)
-      setActionError(err?.shortMessage || 'Add liquidity failed')
+      setActionError(err?.shortMessage || err?.message || 'Add liquidity failed — check token balances')
     } finally {
       setActionLoading(false)
     }

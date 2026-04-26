@@ -67,16 +67,15 @@ function Skeleton({ className }: { className?: string }) {
   return <div className={cn('animate-pulse bg-white/10 rounded', className)} />
 }
 
-const BRIDGE_ABI = [
+const ERC20_APPROVE_ABI = [
   {
     inputs: [
-      { name: 'destChainId', type: 'uint256' },
+      { name: 'spender', type: 'address' },
       { name: 'amount', type: 'uint256' },
-      { name: 'recipient', type: 'address' },
     ],
-    name: 'bridgeTokens',
-    outputs: [],
-    stateMutability: 'payable',
+    name: 'approve',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
 ] as const
@@ -90,6 +89,7 @@ export default function BridgePage() {
   const [amount, setAmount] = useState('')
   const [isBridging, setIsBridging] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [bridgeError, setBridgeError] = useState('')
 
   // Read BSC chain config (56)
   const { data: bscChainConfig, isLoading: bscConfigLoading } = useContractRead({
@@ -145,26 +145,38 @@ export default function BridgePage() {
   const selectedChainLiquidity = selectedChain === 'bsc' ? bscLiquidity : selectedChain === 'zedxion' ? zedxionLiquidity : undefined
 
   const handleBridge = async () => {
-    if (!selectedPair || !amount || !address || !publicClient || !walletClient || !isConnected || !selectedChainConfig) return
+    if (!selectedPair || !amount || !address || !publicClient || !walletClient || !isConnected) return
     setIsBridging(true)
     setTxHash(null)
+    setBridgeError('')
     try {
       const destChainId = selectedChain === 'zedxion' ? BigInt(9000) : BigInt(56)
       const bridgeAmount = parseEther(amount)
-      const gasFee = selectedChainConfig.gasFee || BigInt(0)
 
+      // Approve USDTZ spend by bridge contract
+      const { request: approveReq } = await publicClient.simulateContract({
+        address: USDTZ_ADDRESS,
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [CROSS_CHAIN_BRIDGE_ADDRESS, bridgeAmount],
+        account: address,
+      })
+      const approveTx = await walletClient.writeContract(approveReq)
+      await publicClient.waitForTransactionReceipt({ hash: approveTx })
+
+      // Call initiateBridge(token, amount, destinationChainId, recipient)
       const { request } = await publicClient.simulateContract({
         address: CROSS_CHAIN_BRIDGE_ADDRESS,
-        abi: BRIDGE_ABI,
-        functionName: 'bridgeTokens',
-        args: [destChainId, bridgeAmount, address],
-        value: gasFee,
+        abi: ABIS.CrossChainBridge,
+        functionName: 'initiateBridge',
+        args: [USDTZ_ADDRESS, bridgeAmount, destChainId, address],
         account: address,
       })
       const hash = await walletClient.writeContract(request)
       setTxHash(hash)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Bridge failed:', error)
+      setBridgeError(error?.shortMessage || error?.message || 'Bridge failed — check balance and try again')
     } finally {
       setIsBridging(false)
     }
@@ -420,14 +432,18 @@ export default function BridgePage() {
                         </div>
                       </div>
 
+                      {bridgeError && (
+                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">{bridgeError}</div>
+                      )}
+
                       <Button
                         fullWidth
                         size="lg"
                         onClick={handleBridge}
                         loading={isBridging}
-                        disabled={!amount || parseFloat(amount) <= 0}
+                        disabled={!isConnected || !amount || parseFloat(amount) <= 0}
                       >
-                        {isBridging ? 'Bridging...' : `Bridge to ${selectedChain.toUpperCase()}`}
+                        {!isConnected ? 'Connect Wallet' : isBridging ? 'Bridging...' : `Bridge to ${selectedChain.toUpperCase()}`}
                       </Button>
 
                       <AnimatePresence>
