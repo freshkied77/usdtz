@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff, Lock, Shield, GitBranch, Shuffle } from 'lucide-react'
+import { useAccount, usePublicClient, useWalletClient, useContractRead, useBalance } from 'wagmi'
+import { parseEther, formatEther, keccak256, encodePacked } from 'viem'
 import Layout from '@/components/Layout'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
@@ -12,6 +14,24 @@ import PageHeader from '@/components/ui/PageHeader'
 import Badge from '@/components/ui/Badge'
 import Input from '@/components/ui/Input'
 import AnimatedSection from '@/components/ui/AnimatedSection'
+import { ABIS } from '@/lib/abis'
+import { USDTZ_CONFIG } from '@/lib/config'
+
+const PRIVACY_POOL_ADDRESS = USDTZ_CONFIG.contracts.privacyPool as `0x${string}`
+const USDTZ_ADDRESS = USDTZ_CONFIG.contracts.usdtz as `0x${string}`
+
+const ERC20_APPROVE_ABI = [
+  {
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    name: 'approve',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const
 
 const PRIVACY_LEVELS = [
   { level: 1, name: 'Basic', min: '100', max: '1,000', mult: '1x', color: 'from-blue-400 to-blue-500' },
@@ -20,21 +40,166 @@ const PRIVACY_LEVELS = [
   { level: 4, name: 'Maximum', min: '100,000', max: '1,000,000', mult: '50x', color: 'from-red-400 to-red-500' },
 ]
 
-const RECENT_TXS = [
-  { id: '0x1234...5678', type: 'Deposit', amount: '5,000', anon: '12x', time: '2 mins ago', status: 'Completed' },
-  { id: '0xabcd...efgh', type: 'Transfer', amount: '25,000', anon: '45x', time: '8 mins ago', status: 'Completed' },
-  { id: '0x9988...7766', type: 'Withdraw', amount: '12,500', anon: '28x', time: '15 mins ago', status: 'Completed' },
-  { id: '0x5566...4433', type: 'Deposit', amount: '50,000', anon: '68x', time: '1 hour ago', status: 'Completed' },
-]
+const RECENT_TXS: { id: string; type: string; amount: string; anon: string; time: string; status: string }[] = []
 
 export default function PrivacyPage() {
+  const { address, isConnected } = useAccount()
+  const publicClient = usePublicClient()
+  const { data: walletClient } = useWalletClient()
+
   const [activeTab, setActiveTab] = useState('pool')
   const [selectedLevel, setSelectedLevel] = useState(1)
   const [isMember, setIsMember] = useState(false)
   const [amount, setAmount] = useState('')
   const [recipient, setRecipient] = useState('')
+  const [commitmentHash, setCommitmentHash] = useState('')
+  const [isDepositing, setIsDepositing] = useState(false)
+  const [isTransferring, setIsTransferring] = useState(false)
+  const [txHash, setTxHash] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const [darkTokenIn, setDarkTokenIn] = useState('')
+  const [darkTokenOut, setDarkTokenOut] = useState('')
+  const [darkAmount, setDarkAmount] = useState('')
+  const [darkMinOutput, setDarkMinOutput] = useState('')
+  const [isDarkOrdering, setIsDarkOrdering] = useState(false)
+
+  const { data: usdtzBalance } = useBalance({
+    address,
+    token: USDTZ_ADDRESS,
+    watch: true,
+  })
+
+  const { data: anonymitySetSize } = useContractRead({
+    address: PRIVACY_POOL_ADDRESS,
+    abi: ABIS.PrivacyPool,
+    functionName: 'anonymitySetSize',
+    watch: true,
+  })
 
   const currentLevel = PRIVACY_LEVELS.find(l => l.level === selectedLevel)
+
+  const generateCommitment = (): `0x${string}` => {
+    const secret = crypto.getRandomValues(new Uint8Array(31))
+    const nullifier = crypto.getRandomValues(new Uint8Array(31))
+    const packed = encodePacked(
+      ['bytes', 'bytes'],
+      [`0x${Buffer.from(secret).toString('hex')}`, `0x${Buffer.from(nullifier).toString('hex')}`]
+    )
+    return keccak256(packed)
+  }
+
+  const handleDeposit = async () => {
+    if (!amount || !address || !publicClient || !walletClient || !isConnected) return
+    setIsDepositing(true)
+    setError('')
+    setTxHash(null)
+    try {
+      const depositAmount = parseEther(amount)
+
+      const { request: approveReq } = await publicClient.simulateContract({
+        address: USDTZ_ADDRESS,
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [PRIVACY_POOL_ADDRESS, depositAmount],
+        account: address,
+      })
+      await walletClient.writeContract(approveReq)
+
+      const commitment = generateCommitment()
+      setCommitmentHash(commitment)
+
+      const { request } = await publicClient.simulateContract({
+        address: PRIVACY_POOL_ADDRESS,
+        abi: ABIS.PrivacyPool,
+        functionName: 'deposit',
+        args: [commitment],
+        value: depositAmount,
+        account: address,
+      })
+      const hash = await walletClient.writeContract(request)
+      setTxHash(hash)
+    } catch (err: any) {
+      console.error('Privacy deposit failed:', err)
+      setError(err?.shortMessage || 'Deposit failed — check amount and balance')
+    } finally {
+      setIsDepositing(false)
+    }
+  }
+
+  const handlePrivateTransfer = async () => {
+    if (!amount || !recipient || !address || !publicClient || !walletClient || !isConnected) return
+    setIsTransferring(true)
+    setError('')
+    setTxHash(null)
+    try {
+      const transferAmount = parseEther(amount)
+
+      const { request: approveReq } = await publicClient.simulateContract({
+        address: USDTZ_ADDRESS,
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [PRIVACY_POOL_ADDRESS, transferAmount],
+        account: address,
+      })
+      await walletClient.writeContract(approveReq)
+
+      const commitment = generateCommitment()
+      setCommitmentHash(commitment)
+
+      const { request } = await publicClient.simulateContract({
+        address: PRIVACY_POOL_ADDRESS,
+        abi: ABIS.PrivacyPool,
+        functionName: 'deposit',
+        args: [commitment],
+        value: transferAmount,
+        account: address,
+      })
+      const hash = await walletClient.writeContract(request)
+      setTxHash(hash)
+    } catch (err: any) {
+      console.error('Private transfer failed:', err)
+      setError(err?.shortMessage || 'Transfer failed — check amount and recipient')
+    } finally {
+      setIsTransferring(false)
+    }
+  }
+
+  const handleDarkOrder = async () => {
+    if (!darkAmount || !address || !publicClient || !walletClient || !isConnected) return
+    setIsDarkOrdering(true)
+    setError('')
+    setTxHash(null)
+    try {
+      const orderAmount = parseEther(darkAmount)
+
+      const { request: approveReq } = await publicClient.simulateContract({
+        address: USDTZ_ADDRESS,
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [PRIVACY_POOL_ADDRESS, orderAmount],
+        account: address,
+      })
+      await walletClient.writeContract(approveReq)
+
+      const commitment = generateCommitment()
+
+      const { request } = await publicClient.simulateContract({
+        address: PRIVACY_POOL_ADDRESS,
+        abi: ABIS.PrivacyPool,
+        functionName: 'deposit',
+        args: [commitment],
+        value: orderAmount,
+        account: address,
+      })
+      const hash = await walletClient.writeContract(request)
+      setTxHash(hash)
+    } catch (err: any) {
+      console.error('Dark order failed:', err)
+      setError(err?.shortMessage || 'Dark order failed')
+    } finally {
+      setIsDarkOrdering(false)
+    }
+  }
 
   return (
     <Layout>
@@ -47,10 +212,10 @@ export default function PrivacyPage() {
 
         <AnimatedSection className="mb-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard label="Private Volume" value="$245.8M" icon={<EyeOff className="w-5 h-5" />} />
-            <StatCard label="Anonymity Set" value="12,458" icon={<Shuffle className="w-5 h-5" />} />
-            <StatCard label="Transactions" value="45,234" />
-            <StatCard label="Privacy Level" value="Maximum" />
+            <StatCard label="Privacy Levels" value="4" icon={<EyeOff className="w-5 h-5" />} />
+            <StatCard label="Anonymity Set" value={anonymitySetSize ? Number(anonymitySetSize).toLocaleString() : '—'} icon={<Shuffle className="w-5 h-5" />} />
+            <StatCard label="ZK Proofs" value="Active" />
+            <StatCard label="Max Anonymity" value="50x" />
           </div>
         </AnimatedSection>
 
@@ -119,8 +284,8 @@ export default function PrivacyPage() {
                         placeholder="0.00"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        balance="Balance: 125,000 USDTZ"
-                        onMax={() => setAmount('125000')}
+                        balance={`Balance: ${usdtzBalance ? parseFloat(formatEther(usdtzBalance.value)).toFixed(2) : '0.00'} USDTZ`}
+                        onMax={() => usdtzBalance && setAmount(formatEther(usdtzBalance.value))}
                         className="text-xl font-bold"
                       />
 
@@ -131,7 +296,7 @@ export default function PrivacyPage() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Anonymity Set</span>
-                          <span className="text-primary-400">12,458 addresses</span>
+                          <span className="text-primary-400">{anonymitySetSize ? `${Number(anonymitySetSize).toLocaleString()} addresses` : '—'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">Expected Anonymity</span>
@@ -143,7 +308,25 @@ export default function PrivacyPage() {
                         </div>
                       </div>
 
-                      <Button fullWidth size="lg">Generate Private Commitment</Button>
+                      {txHash && (
+                        <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-sm">
+                          <p className="text-green-400 font-medium">Deposit submitted!</p>
+                          <p className="text-xs text-gray-400 mt-1 font-mono break-all">Tx: {txHash}</p>
+                          {commitmentHash && <p className="text-xs text-gray-400 mt-1 font-mono break-all">Commitment: {commitmentHash}</p>}
+                        </div>
+                      )}
+                      {error && (
+                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">{error}</div>
+                      )}
+                      <Button
+                        fullWidth
+                        size="lg"
+                        onClick={handleDeposit}
+                        loading={isDepositing}
+                        disabled={!isConnected || !amount || parseFloat(amount) <= 0}
+                      >
+                        {!isConnected ? 'Connect Wallet' : 'Generate Private Commitment'}
+                      </Button>
                     </div>
                   </Card>
 
@@ -190,8 +373,25 @@ export default function PrivacyPage() {
                         </div>
                       </div>
 
-                      <Input label="Commitment Hash" placeholder="Auto-generated" className="font-mono text-sm" />
-                      <Button fullWidth size="lg">Execute Private Transfer</Button>
+                      <Input label="Commitment Hash" placeholder="Auto-generated" value={commitmentHash} className="font-mono text-sm" />
+                      {txHash && activeTab === 'transfer' && (
+                        <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-sm">
+                          <p className="text-green-400 font-medium">Transfer submitted!</p>
+                          <p className="text-xs text-gray-400 mt-1 font-mono break-all">Tx: {txHash}</p>
+                        </div>
+                      )}
+                      {error && activeTab === 'transfer' && (
+                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">{error}</div>
+                      )}
+                      <Button
+                        fullWidth
+                        size="lg"
+                        onClick={handlePrivateTransfer}
+                        loading={isTransferring}
+                        disabled={!isConnected || !amount || !recipient || parseFloat(amount) <= 0}
+                      >
+                        {!isConnected ? 'Connect Wallet' : 'Execute Private Transfer'}
+                      </Button>
                     </div>
                   </Card>
 
@@ -232,20 +432,37 @@ export default function PrivacyPage() {
                     <div className="p-5 bg-white/5 rounded-xl">
                       <h3 className="font-semibold mb-4">Place Dark Order</h3>
                       <div className="space-y-4">
-                        <Input label="Token In" placeholder="USDTZ" />
-                        <Input label="Token Out" placeholder="USDT" />
-                        <Input type="number" label="Amount" placeholder="0.00" />
-                        <Input type="number" label="Minimum Output" placeholder="0.00" />
-                        <Button variant="outline" fullWidth>Place Dark Order</Button>
+                        <Input label="Token In" placeholder="USDTZ" value={darkTokenIn} onChange={(e) => setDarkTokenIn(e.target.value)} />
+                        <Input label="Token Out" placeholder="USDT" value={darkTokenOut} onChange={(e) => setDarkTokenOut(e.target.value)} />
+                        <Input type="number" label="Amount" placeholder="0.00" value={darkAmount} onChange={(e) => setDarkAmount(e.target.value)} />
+                        <Input type="number" label="Minimum Output" placeholder="0.00" value={darkMinOutput} onChange={(e) => setDarkMinOutput(e.target.value)} />
+                        {txHash && activeTab === 'dark' && (
+                          <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-sm">
+                            <p className="text-green-400 font-medium">Dark order placed!</p>
+                            <p className="text-xs text-gray-400 mt-1 font-mono break-all">Tx: {txHash}</p>
+                          </div>
+                        )}
+                        {error && activeTab === 'dark' && (
+                          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">{error}</div>
+                        )}
+                        <Button
+                          variant="outline"
+                          fullWidth
+                          onClick={handleDarkOrder}
+                          loading={isDarkOrdering}
+                          disabled={!isConnected || !darkAmount || parseFloat(darkAmount) <= 0}
+                        >
+                          {!isConnected ? 'Connect Wallet' : 'Place Dark Order'}
+                        </Button>
                       </div>
                     </div>
                     <div className="p-5 bg-white/5 rounded-xl">
                       <h3 className="font-semibold mb-4">Dark Pool Stats</h3>
                       <div className="space-y-4">
                         {[
-                          { label: 'Active Orders', value: '1,234' },
-                          { label: 'Volume', value: '$89.5M' },
-                          { label: 'Your Orders', value: '3' },
+                          { label: 'Active Orders', value: '—' },
+                          { label: 'Volume', value: '—' },
+                          { label: 'Your Orders', value: '—' },
                           { label: 'Timeout', value: '24 hours' },
                         ].map((s, i) => (
                           <div key={i} className="flex justify-between">
@@ -284,6 +501,13 @@ export default function PrivacyPage() {
                 <Card>
                   <h2 className="text-xl font-bold mb-4">Privacy Transaction History</h2>
                   <div className="space-y-3">
+                    {RECENT_TXS.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        <Lock className="w-10 h-10 mx-auto mb-3 text-gray-600" />
+                        <p className="text-lg font-medium mb-1">No privacy transactions yet</p>
+                        <p className="text-sm">Your private deposits, transfers, and withdrawals will appear here.</p>
+                      </div>
+                    )}
                     {RECENT_TXS.map((tx, i) => (
                       <motion.div
                         key={i}

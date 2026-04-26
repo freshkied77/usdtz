@@ -167,11 +167,11 @@ app.post('/api/v1/balance', authMiddleware, apiLimiter, async (req, res) => {
     }
     
     const balance = await web3.eth.getBalance(address);
-    
+
     res.json({
       jsonrpc: '2.0',
       id: 1,
-      result: balance
+      result: balance.toString()
     });
   } catch (error) {
     res.status(500).json({
@@ -232,12 +232,19 @@ app.post('/api/v1/receipt', authMiddleware, apiLimiter, async (req, res) => {
   }
 });
 
-app.get('/api/v1/health', (req, res) => {
+app.get('/api/v1/health', async (req, res) => {
+  let connected = false;
+  try {
+    await web3.eth.getBlockNumber();
+    connected = true;
+  } catch (e) {
+    connected = false;
+  }
   res.json({
     status: 'healthy',
     timestamp: Date.now(),
     chainId: BSC_CHAIN_ID,
-    connected: web3.currentProvider?.connected || false,
+    connected,
     version: '1.0.0'
   });
 });

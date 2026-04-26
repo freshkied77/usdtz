@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CreditCard, Building2, Smartphone, DollarSign, Shield, Clock, ChevronDown, CheckCircle, AlertCircle, Zap, Globe, ArrowRight } from 'lucide-react'
+import { CreditCard, Building2, Smartphone, DollarSign, Shield, Clock, ChevronDown, CheckCircle, AlertCircle, AlertTriangle, Zap, Globe, ArrowRight, ExternalLink } from 'lucide-react'
 import Layout from '@/components/Layout'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
@@ -12,6 +12,9 @@ import Badge from '@/components/ui/Badge'
 import StatCard from '@/components/ui/StatCard'
 import PageHeader from '@/components/ui/PageHeader'
 import AnimatedSection from '@/components/ui/AnimatedSection'
+import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
+import { parseEther } from 'viem'
+import { USDTZ_CONFIG } from '@/lib/config'
 
 const PAYMENT_METHODS = [
   { id: 'card', label: 'Debit / Credit Card', icon: CreditCard, fee: '2.5%', time: '~2 min', desc: 'Visa, Mastercard, Apple Pay, Google Pay' },
@@ -26,12 +29,7 @@ const CURRENCIES = [
   { code: 'NGN', name: 'Nigerian Naira', symbol: '\u20A6' },
 ]
 
-const RECENT_PURCHASES = [
-  { amount: '5,000', currency: 'USD', usdtz: '4,975', method: 'card', status: 'Completed', time: '12 mins ago' },
-  { amount: '12,500', currency: 'USD', usdtz: '12,437.50', method: 'bank', status: 'Completed', time: '2 hrs ago' },
-  { amount: '1,000', currency: 'EUR', usdtz: '1,082.50', method: 'mobile', status: 'Processing', time: '5 mins ago' },
-  { amount: '25,000', currency: 'USD', usdtz: '24,875', method: 'bank', status: 'Completed', time: '1 day ago' },
-]
+const RECENT_PURCHASES: { amount: string; currency: string; usdtz: string; method: string; status: string; time: string }[] = []
 
 const WHY_BUY = [
   { title: 'Instant Settlement', desc: 'USDTZ arrives in your wallet within minutes, not days', icon: Zap },
@@ -41,12 +39,18 @@ const WHY_BUY = [
 ]
 
 export default function BuyPage() {
+  const { address, isConnected } = useAccount()
+  const publicClient = usePublicClient()
+  const { data: walletClient } = useWalletClient()
   const [activeTab, setActiveTab] = useState('buy')
   const [paymentMethod, setPaymentMethod] = useState('card')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('USD')
   const [showCurrencySelect, setShowCurrencySelect] = useState(false)
   const [kycStatus] = useState<'verified' | 'pending' | 'none'>('none')
+  const [isBuying, setIsBuying] = useState(false)
+  const [txHash, setTxHash] = useState<string | null>(null)
+  const [buyError, setBuyError] = useState('')
 
   const selectedMethod = PAYMENT_METHODS.find(m => m.id === paymentMethod)
   const selectedCurrency = CURRENCIES.find(c => c.code === currency)
@@ -56,6 +60,43 @@ export default function BuyPage() {
   const numAmount = parseFloat(amount || '0')
   const feeAmount = numAmount * totalFeePercent
   const receiveAmount = numAmount > 0 ? (numAmount - feeAmount).toFixed(2) : '0.00'
+
+  const handleBuy = async () => {
+    if (!amount || numAmount < 10 || !address || !publicClient || !walletClient) return
+    setIsBuying(true)
+    setBuyError('')
+    setTxHash(null)
+    try {
+      // For fiat on-ramp, this would integrate with a provider like MoonPay, Transak, or Stripe
+      // For now, simulate a direct USDTZ purchase via the fiatOnRamp contract
+      const fiatOnRampAddress = USDTZ_CONFIG.contracts.fiatOnRamp as `0x${string}`
+      const buyAmount = parseEther(receiveAmount)
+      
+      // Note: In production, this would call an off-ramp provider API first
+      // This is a simplified on-chain simulation
+      const { request } = await publicClient.simulateContract({
+        address: fiatOnRampAddress,
+        abi: [{
+          inputs: [{ name: 'amount', type: 'uint256' }],
+          name: 'buyWithFiat',
+          outputs: [],
+          stateMutability: 'payable',
+          type: 'function',
+        }],
+        functionName: 'buyWithFiat',
+        args: [buyAmount],
+        value: BigInt(Math.floor(numAmount * 1e18)), // Simulated fiat value
+        account: address,
+      })
+      const hash = await walletClient.writeContract(request)
+      setTxHash(hash)
+    } catch (error: any) {
+      console.error('Buy failed:', error)
+      setBuyError(error?.shortMessage || 'Buy failed — please complete KYC first or try a smaller amount')
+    } finally {
+      setIsBuying(false)
+    }
+  }
 
   return (
     <Layout>
@@ -69,10 +110,10 @@ export default function BuyPage() {
         {/* Stats */}
         <AnimatedSection className="mb-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard label="Total Purchased" value="$48.2M" icon={<DollarSign className="w-5 h-5" />} />
-            <StatCard label="24h Volume" value="$2.1M" change="+18.5%" />
-            <StatCard label="Total Buyers" value="12,458" change="+342" />
-            <StatCard label="Avg. Completion" value="~2 min" icon={<Clock className="w-5 h-5" />} />
+            <StatCard label="Payment Methods" value="3" icon={<DollarSign className="w-5 h-5" />} />
+            <StatCard label="Currencies" value="4" />
+            <StatCard label="Min Purchase" value="$10" />
+            <StatCard label="Max Purchase" value="$50,000" icon={<Clock className="w-5 h-5" />} />
           </div>
         </AnimatedSection>
 
@@ -269,14 +310,49 @@ export default function BuyPage() {
                     <Button
                       fullWidth
                       size="lg"
+                      onClick={handleBuy}
+                      loading={isBuying}
                       disabled={!amount || numAmount < 10 || numAmount > 50000 || kycStatus === 'none'}
                     >
                       {kycStatus === 'none' ? 'Complete Verification to Buy' :
                        !amount ? 'Enter Amount' :
                        numAmount < 10 ? 'Below Minimum ($10)' :
                        numAmount > 50000 ? 'Above Maximum ($50,000)' :
+                       isBuying ? 'Processing...' :
                        `Buy ${parseFloat(receiveAmount).toLocaleString()} USDTZ`}
                     </Button>
+
+                    {buyError && (
+                      <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                        <p className="text-sm text-red-400 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 shrink-0" />
+                          {buyError}
+                        </p>
+                      </div>
+                    )}
+
+                    <AnimatePresence>
+                      {txHash && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl"
+                        >
+                          <div className="flex items-center gap-3 mb-2">
+                            <CheckCircle className="w-5 h-5 text-green-400" />
+                            <span className="text-green-400 font-medium">Purchase submitted!</span>
+                          </div>
+                          <a
+                            href={`https://bscscan.com/tx/${txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-gray-400 hover:text-primary-400 flex items-center gap-1"
+                          >
+                            View on BSCScan <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     <p className="text-xs text-gray-500 text-center">
                       By purchasing, you agree to our terms. Prices powered by Chainlink oracles.
@@ -350,6 +426,12 @@ export default function BuyPage() {
             <Card>
               <h2 className="text-xl font-bold mb-4">Purchase History</h2>
               <div className="space-y-3">
+                {RECENT_PURCHASES.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-lg font-medium mb-1">No purchases yet</p>
+                    <p className="text-sm">Your purchase history will appear here after your first buy.</p>
+                  </div>
+                )}
                 {RECENT_PURCHASES.map((purchase, i) => (
                   <motion.div
                     key={i}

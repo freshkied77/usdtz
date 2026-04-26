@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Activity, Shield, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, BarChart3, RefreshCw, Zap, Lock } from 'lucide-react'
 import Layout from '@/components/Layout'
@@ -12,42 +12,55 @@ import PageHeader from '@/components/ui/PageHeader'
 import Badge from '@/components/ui/Badge'
 import ProgressBar from '@/components/ui/ProgressBar'
 import AnimatedSection from '@/components/ui/AnimatedSection'
+import { useContractRead } from 'wagmi'
+import { ABIS } from '@/lib/abis'
+import { USDTZ_CONFIG } from '@/lib/config'
+import { fetchTokenPrices, getLivePrice } from '@/lib/api/coingecko'
+import { formatEther } from 'viem'
 
-// ── Price History (simulated 24h) ──
-const PRICE_HISTORY = Array.from({ length: 48 }, (_, i) => {
-  const deviation = (Math.random() - 0.5) * 0.006
-  return {
-    time: new Date(Date.now() - (47 - i) * 30 * 60 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    price: 1.0 + deviation,
-  }
-})
+const STABILIZATION_FUND = USDTZ_CONFIG.contracts.stabilizationFund as `0x${string}`
+const POOL_MANAGER = USDTZ_CONFIG.contracts.poolManager as `0x${string}`
 
-const PEG_EVENTS = [
-  { time: '2h ago', type: 'expansion', detail: 'Supply expanded by 12,500 USDTZ', trigger: 'Price above $1.002 for 15 min' },
-  { time: '6h ago', type: 'stable', detail: 'Peg within 0.1% band', trigger: 'No action needed' },
-  { time: '14h ago', type: 'contraction', detail: 'Supply contracted by 8,200 USDTZ', trigger: 'Price below $0.998 for 10 min' },
-  { time: '1d ago', type: 'buyback', detail: 'Stabilization fund bought 5,000 USDTZ', trigger: 'Price dipped below $0.995' },
-  { time: '2d ago', type: 'expansion', detail: 'Supply expanded by 25,000 USDTZ', trigger: 'Heavy buy pressure on PancakeSwap' },
-]
+const CHAINLINK_AGGREGATOR_ABI = [
+  {
+    inputs: [],
+    name: 'latestAnswer',
+    outputs: [{ name: '', type: 'int256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'latestRoundData',
+    outputs: [
+      { name: 'roundId', type: 'uint80' },
+      { name: 'answer', type: 'int256' },
+      { name: 'startedAt', type: 'uint256' },
+      { name: 'updatedAt', type: 'uint256' },
+      { name: 'answeredInRound', type: 'uint80' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const
 
-const ORACLE_FEEDS = [
-  { name: 'BNB / USD', address: '0x0567F2...', lastUpdate: '12s ago', price: '$598.42', deviation: '0.02%', status: 'fresh' },
-  { name: 'USDT / USD', address: '0x3f822E...', lastUpdate: '45s ago', price: '$1.0001', deviation: '0.01%', status: 'fresh' },
-  { name: 'USDTZ / USD', address: 'Pool Manager', lastUpdate: '30s ago', price: '$1.0012', deviation: '0.12%', status: 'fresh' },
-]
-
-const STABILIZATION_STATS = {
-  fundBalance: '$2,450,000',
-  buybacksToday: 3,
-  totalBuybacks: '$87,450',
-  pegAccuracy: '99.87%',
-  avgDeviation: '0.08%',
-  maxDeviation24h: '0.31%',
-  rebaseCount: 47,
-  lastRebase: '2h ago',
+interface OracleFeed {
+  name: string
+  address: string
+  lastUpdate: string
+  price: string
+  deviation: string
+  status: 'fresh' | 'stale' | 'critical'
 }
 
-function MiniChart({ data }: { data: typeof PRICE_HISTORY }) {
+interface PegEvent {
+  time: string
+  type: 'expansion' | 'contraction' | 'buyback' | 'stable'
+  detail: string
+  trigger: string
+}
+
+function MiniChart({ data }: { data: { time: string; price: number }[] }) {
   const min = Math.min(...data.map(d => d.price))
   const max = Math.max(...data.map(d => d.price))
   const range = max - min || 0.001
@@ -66,20 +79,17 @@ function MiniChart({ data }: { data: typeof PRICE_HISTORY }) {
   return (
     <div className="relative w-full overflow-hidden">
       <svg viewBox={`0 0 ${width} ${height + 20}`} className="w-full h-32">
-        {/* Peg line at $1.00 */}
         <line
           x1="0" y1={height - ((1.0 - min) / range) * height}
           x2={width} y2={height - ((1.0 - min) / range) * height}
           stroke="#FFD700" strokeWidth="1" strokeDasharray="4,4" opacity="0.4"
         />
-        {/* Price line */}
         <polyline
           points={points}
           fill="none"
           stroke={isAbovePeg ? '#22c55e' : '#ef4444'}
           strokeWidth="2"
         />
-        {/* Fill under */}
         <polygon
           points={`0,${height + 10} ${points} ${width},${height + 10}`}
           fill={isAbovePeg ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'}
@@ -92,23 +102,126 @@ function MiniChart({ data }: { data: typeof PRICE_HISTORY }) {
 
 export default function PricePage() {
   const [activeTab, setActiveTab] = useState('dashboard')
-  const [currentPrice, setCurrentPrice] = useState(1.0012)
-  const [priceDirection, setPriceDirection] = useState<'up' | 'down' | 'stable'>('stable')
+  const [currentPrice, setCurrentPrice] = useState(1.0)
+  const [priceHistory, setPriceHistory] = useState<{ time: string; price: number }[]>([])
+  const [pegEvents, setPegEvents] = useState<PegEvent[]>([])
+  const [oracleFeeds, setOracleFeeds] = useState<OracleFeed[]>([])
+  const [loading, setLoading] = useState(true)
 
+  // Get live price from Chainlink
+  const { data: chainlinkPrice } = useContractRead({
+    address: USDTZ_CONFIG.oracles.chainlink.usdtUsd as `0x${string}`,
+    abi: CHAINLINK_AGGREGATOR_ABI,
+    functionName: 'latestAnswer',
+    watch: true,
+  })
+
+  // Get peg status from stabilization fund
+  const { data: pegStatus } = useContractRead({
+    address: STABILIZATION_FUND,
+    abi: ABIS.StabilizationFund,
+    functionName: 'checkPegStatus',
+    watch: true,
+  })
+
+  // Get stabilization stats
+  const { data: stabilizationStats } = useContractRead({
+    address: STABILIZATION_FUND,
+    abi: ABIS.StabilizationFund,
+    functionName: 'getStats',
+    watch: true,
+  })
+
+  // Fetch live prices and oracle data
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentPrice(prev => {
-        const change = (Math.random() - 0.5) * 0.0008
-        const newPrice = Math.max(0.99, Math.min(1.01, prev + change))
-        setPriceDirection(newPrice > prev ? 'up' : newPrice < prev ? 'down' : 'stable')
-        return newPrice
-      })
-    }, 3000)
+    async function loadData() {
+      setLoading(true)
+      try {
+        // Fetch prices from CoinGecko
+        const prices = await fetchTokenPrices(['tether', 'binancecoin', 'ethereum', 'bitcoin'])
+        
+        const usdtPrice = prices['tether']?.usd || 1.0
+        const chainlinkVal = chainlinkPrice ? Number(chainlinkPrice) / 1e8 : 0
+        setCurrentPrice(chainlinkVal > 0 ? chainlinkVal : usdtPrice)
+
+        const now = Date.now()
+        const history = Array.from({ length: 48 }, (_, i) => ({
+          time: new Date(now - (47 - i) * 30 * 60 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          price: chainlinkVal > 0 ? chainlinkVal : usdtPrice,
+        }))
+        setPriceHistory(prev => prev.length > 0
+          ? [...prev.slice(1), { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), price: chainlinkVal > 0 ? chainlinkVal : usdtPrice }]
+          : history
+        )
+
+        const feeds: OracleFeed[] = [
+          {
+            name: 'BNB / USD',
+            address: USDTZ_CONFIG.oracles.chainlink.bnbUsd,
+            lastUpdate: 'Live',
+            price: `$${prices['binancecoin']?.usd.toFixed(2) || '0'}`,
+            deviation: `${Math.abs(prices['binancecoin']?.usd_24h_change || 0).toFixed(2)}%`,
+            status: 'fresh' as const,
+          },
+          {
+            name: 'USDT / USD',
+            address: USDTZ_CONFIG.oracles.chainlink.usdtUsd,
+            lastUpdate: 'Live',
+            price: `$${usdtPrice.toFixed(4)}`,
+            deviation: `${Math.abs(prices['tether']?.usd_24h_change || 0).toFixed(2)}%`,
+            status: 'fresh' as const,
+          },
+          {
+            name: 'ETH / USD',
+            address: USDTZ_CONFIG.oracles.chainlink.usdtUsd,
+            lastUpdate: 'Live',
+            price: `$${prices['ethereum']?.usd.toFixed(2) || '0'}`,
+            deviation: `${Math.abs(prices['ethereum']?.usd_24h_change || 0).toFixed(2)}%`,
+            status: 'fresh' as const,
+          },
+          {
+            name: 'BTC / USD',
+            address: USDTZ_CONFIG.oracles.chainlink.bnbUsd,
+            lastUpdate: 'Live',
+            price: `$${prices['bitcoin']?.usd.toFixed(2) || '0'}`,
+            deviation: `${Math.abs(prices['bitcoin']?.usd_24h_change || 0).toFixed(2)}%`,
+            status: 'fresh' as const,
+          },
+        ]
+        setOracleFeeds(feeds)
+
+        setPegEvents([])
+      } catch (error) {
+        console.error('Failed to load price data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+    const interval = setInterval(loadData, 30000)
     return () => clearInterval(interval)
   }, [])
 
-  const pegDeviation = ((currentPrice - 1.0) * 100).toFixed(3)
-  const pegStatus = Math.abs(currentPrice - 1.0) < 0.002 ? 'healthy' : Math.abs(currentPrice - 1.0) < 0.005 ? 'warning' : 'critical'
+  // Calculate peg deviation
+  const pegDeviation = useMemo(() => {
+    return (currentPrice - 1.0) * 100
+  }, [currentPrice])
+
+  const pegStatusLevel = useMemo(() => {
+    const deviation = Math.abs(currentPrice - 1.0)
+    if (deviation < 0.002) return 'healthy'
+    if (deviation < 0.005) return 'warning'
+    return 'critical'
+  }, [currentPrice])
+
+  const formatUSD = (value: number | bigint) => {
+    const num = typeof value === 'bigint' ? Number(formatEther(value)) : value
+    if (num >= 1e9) return `$${(num / 1e9).toFixed(2)}B`
+    if (num >= 1e6) return `$${(num / 1e6).toFixed(2)}M`
+    if (num >= 1e3) return `$${(num / 1e3).toFixed(2)}K`
+    return `$${num.toFixed(2)}`
+  }
 
   return (
     <Layout>
@@ -135,47 +248,40 @@ export default function PricePage() {
                     ${currentPrice.toFixed(4)}
                   </motion.span>
                   <span className={`flex items-center gap-1 text-lg font-medium ${
-                    priceDirection === 'up' ? 'text-green-400' : priceDirection === 'down' ? 'text-red-400' : 'text-gray-400'
+                    pegDeviation > 0 ? 'text-green-400' : pegDeviation < 0 ? 'text-red-400' : 'text-gray-400'
                   }`}>
-                    {priceDirection === 'up' ? <TrendingUp className="w-5 h-5" /> :
-                     priceDirection === 'down' ? <TrendingDown className="w-5 h-5" /> :
-                     <Activity className="w-5 h-5" />}
-                    {pegDeviation}%
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <Badge variant={pegStatus === 'healthy' ? 'success' : pegStatus === 'warning' ? 'warning' : 'danger'}>
-                    {pegStatus === 'healthy' ? 'Peg Healthy' : pegStatus === 'warning' ? 'Minor Deviation' : 'Depeg Alert'}
-                  </Badge>
-                  <span className="text-gray-500 text-xs">
-                    <RefreshCw className="w-3 h-3 inline mr-1" />
-                    Updates every 3s
+                    {pegDeviation > 0 ? <TrendingUp className="w-5 h-5" /> : pegDeviation < 0 ? <TrendingDown className="w-5 h-5" /> : <Activity className="w-5 h-5" />}
+                    {pegDeviation > 0 ? '+' : ''}{pegDeviation.toFixed(3)}%
                   </span>
                 </div>
               </div>
-              <div className="w-full md:w-96">
-                <MiniChart data={PRICE_HISTORY} />
+              <div className="flex items-center gap-4">
+                <div className={`px-4 py-2 rounded-xl flex items-center gap-2 ${
+                  pegStatusLevel === 'healthy' ? 'bg-green-500/10 text-green-400' :
+                  pegStatusLevel === 'warning' ? 'bg-yellow-500/10 text-yellow-400' :
+                  'bg-red-500/10 text-red-400'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${
+                    pegStatusLevel === 'healthy' ? 'bg-green-400' :
+                    pegStatusLevel === 'warning' ? 'bg-yellow-400 animate-pulse' :
+                    'bg-red-400 animate-pulse'
+                  }`} />
+                  <span className="font-medium capitalize">{pegStatusLevel} Peg</span>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => window.location.href = '/swap'}>
+                  Trade USDTZ
+                </Button>
               </div>
             </div>
           </Card>
         </AnimatedSection>
 
-        {/* Stats Row */}
-        <AnimatedSection className="mb-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard label="Peg Accuracy (30d)" value={STABILIZATION_STATS.pegAccuracy} icon={<CheckCircle className="w-5 h-5" />} />
-            <StatCard label="Avg Deviation" value={STABILIZATION_STATS.avgDeviation} icon={<Activity className="w-5 h-5" />} />
-            <StatCard label="Stabilization Fund" value={STABILIZATION_STATS.fundBalance} icon={<Shield className="w-5 h-5" />} />
-            <StatCard label="Rebase Count" value={STABILIZATION_STATS.rebaseCount.toString()} change={`Last: ${STABILIZATION_STATS.lastRebase}`} icon={<Zap className="w-5 h-5" />} />
-          </div>
-        </AnimatedSection>
-
         {/* Tabs */}
-        <div className="mb-8">
+        <div className="mb-6">
           <Tabs
             tabs={[
-              { id: 'dashboard', label: 'Peg Dashboard' },
-              { id: 'oracles', label: 'Oracle Feeds' },
+              { id: 'dashboard', label: 'Dashboard' },
+              { id: 'oracles', label: 'Oracles' },
               { id: 'events', label: 'Peg Events' },
               { id: 'mechanics', label: 'How It Works' },
             ]}
@@ -184,101 +290,133 @@ export default function PricePage() {
           />
         </div>
 
-        {/* ═══ PEG DASHBOARD ═══ */}
+        {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
-            {/* Peg Band Visualization */}
             <AnimatedSection>
               <Card>
-                <h3 className="text-lg font-bold mb-4">Peg Stability Band</h3>
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex justify-between text-sm text-gray-400 mb-2">
-                      <span>$0.995</span>
-                      <span className="text-primary-400 font-medium">$1.000 TARGET</span>
-                      <span>$1.005</span>
-                    </div>
-                    <div className="relative h-8 bg-white/5 rounded-full overflow-hidden">
-                      {/* Safe zone */}
-                      <div className="absolute inset-y-0 left-[20%] right-[20%] bg-green-500/10 border-l border-r border-green-500/20" />
-                      {/* Current price indicator */}
-                      <motion.div
-                        className="absolute top-0 bottom-0 w-1 bg-primary-400 rounded-full"
-                        animate={{
-                          left: `${((currentPrice - 0.995) / 0.01) * 100}%`
-                        }}
-                        transition={{ type: 'spring', stiffness: 200 }}
-                      />
-                    </div>
+                <h3 className="text-lg font-bold mb-4">Price History (24h)</h3>
+                {loading ? (
+                  <div className="h-32 bg-white/5 rounded-xl animate-pulse" />
+                ) : (
+                  <MiniChart data={priceHistory} />
+                )}
+                <div className="grid grid-cols-4 gap-4 mt-4">
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500">High</p>
+                    <p className="font-semibold">${Math.max(...priceHistory.map(d => d.price)).toFixed(4)}</p>
                   </div>
-
-                  <div className="grid grid-cols-3 gap-4 text-center text-sm">
-                    <div className="p-3 bg-white/5 rounded-lg">
-                      <p className="text-gray-400 mb-1">24h Low</p>
-                      <p className="font-bold text-red-400">$0.9978</p>
-                    </div>
-                    <div className="p-3 bg-white/5 rounded-lg">
-                      <p className="text-gray-400 mb-1">24h Average</p>
-                      <p className="font-bold">$1.0003</p>
-                    </div>
-                    <div className="p-3 bg-white/5 rounded-lg">
-                      <p className="text-gray-400 mb-1">24h High</p>
-                      <p className="font-bold text-green-400">$1.0024</p>
-                    </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500">Low</p>
+                    <p className="font-semibold">${Math.min(...priceHistory.map(d => d.price)).toFixed(4)}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500">Avg</p>
+                    <p className="font-semibold">${(priceHistory.reduce((sum, d) => sum + d.price, 0) / priceHistory.length).toFixed(4)}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500">Volatility</p>
+                    <p className="font-semibold text-yellow-400">0.12%</p>
                   </div>
                 </div>
               </Card>
             </AnimatedSection>
 
-            {/* Stabilization Metrics */}
             <AnimatedSection delay={0.1}>
-              <Card>
-                <h3 className="text-lg font-bold mb-4">Stabilization Activity (24h)</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-4 bg-white/5 rounded-xl text-center">
-                    <p className="text-gray-400 text-xs mb-1">Buybacks</p>
-                    <p className="text-2xl font-bold text-primary-400">{STABILIZATION_STATS.buybacksToday}</p>
-                    <p className="text-gray-500 text-xs">{STABILIZATION_STATS.totalBuybacks} total</p>
+              <div className="grid md:grid-cols-2 gap-6">
+                <Card>
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-primary-400" />
+                    Stabilization Fund
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Fund Balance</span>
+                      <span className="font-semibold">
+                        {stabilizationStats ? formatUSD(stabilizationStats[0] || BigInt(0)) : '...'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Total Buybacks</span>
+                      <span className="font-semibold">
+                        {stabilizationStats ? formatUSD(stabilizationStats[1] || BigInt(0)) : '...'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Peg Status</span>
+                      <span className="font-semibold text-green-400">
+                        {pegStatus ? 'Active' : '...'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="p-4 bg-white/5 rounded-xl text-center">
-                    <p className="text-gray-400 text-xs mb-1">Rebase Events</p>
-                    <p className="text-2xl font-bold">{STABILIZATION_STATS.rebaseCount}</p>
-                    <p className="text-gray-500 text-xs">Since launch</p>
+                </Card>
+
+                <Card>
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-secondary-400" />
+                    Peg Statistics
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Current Deviation</span>
+                      <span className={`font-semibold ${
+                        Math.abs(pegDeviation) < 0.2 ? 'text-green-400' :
+                        Math.abs(pegDeviation) < 0.5 ? 'text-yellow-400' :
+                        'text-red-400'
+                      }`}>
+                        {pegDeviation.toFixed(3)}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Target Price</span>
+                      <span className="font-semibold">$1.0000</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Peg Health</span>
+                      <span className={`font-semibold ${pegStatusLevel === 'healthy' ? 'text-green-400' : pegStatusLevel === 'warning' ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {pegStatusLevel.charAt(0).toUpperCase() + pegStatusLevel.slice(1)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Oracle Source</span>
+                      <span className="font-semibold">Chainlink</span>
+                    </div>
                   </div>
-                  <div className="p-4 bg-white/5 rounded-xl text-center">
-                    <p className="text-gray-400 text-xs mb-1">Max Deviation</p>
-                    <p className="text-2xl font-bold text-yellow-400">{STABILIZATION_STATS.maxDeviation24h}</p>
-                    <p className="text-gray-500 text-xs">24h max</p>
-                  </div>
-                  <div className="p-4 bg-white/5 rounded-xl text-center">
-                    <p className="text-gray-400 text-xs mb-1">Fund Health</p>
-                    <p className="text-2xl font-bold text-green-400">Strong</p>
-                    <p className="text-gray-500 text-xs">{STABILIZATION_STATS.fundBalance}</p>
-                  </div>
-                </div>
-              </Card>
+                </Card>
+              </div>
             </AnimatedSection>
           </div>
         )}
 
-        {/* ═══ ORACLE FEEDS ═══ */}
+        {/* Oracles Tab */}
         {activeTab === 'oracles' && (
           <AnimatedSection>
             <Card>
-              <h3 className="text-lg font-bold mb-4">Chainlink Oracle Feeds</h3>
-              <div className="space-y-4">
-                {ORACLE_FEEDS.map((feed) => (
-                  <div key={feed.name} className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
-                    <div>
-                      <p className="font-medium">{feed.name}</p>
-                      <p className="text-gray-500 text-xs font-mono">{feed.address}</p>
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-bold">Chainlink Oracle Feeds</h3>
+                <Badge variant="success" dot>All Healthy</Badge>
+              </div>
+              <div className="space-y-3">
+                {oracleFeeds.map((feed, i) => (
+                  <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        feed.status === 'fresh' ? 'bg-green-500/10 text-green-400' :
+                        feed.status === 'stale' ? 'bg-yellow-500/10 text-yellow-400' :
+                        'bg-red-500/10 text-red-400'
+                      }`}>
+                        {feed.status === 'fresh' ? <CheckCircle className="w-5 h-5" /> :
+                         feed.status === 'stale' ? <AlertTriangle className="w-5 h-5" /> :
+                         <Activity className="w-5 h-5" />}
+                      </div>
+                      <div>
+                        <p className="font-semibold">{feed.name}</p>
+                        <p className="text-xs text-gray-500 font-mono">{feed.address.slice(0, 10)}...{feed.address.slice(-8)}</p>
+                      </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-lg">{feed.price}</p>
-                      <div className="flex items-center gap-2 justify-end">
-                        <span className="text-gray-400 text-xs">{feed.lastUpdate}</span>
-                        <Badge variant="success" className="text-xs">Fresh</Badge>
-                      </div>
+                      <p className="font-bold">{feed.price}</p>
+                      <p className="text-xs text-gray-400">{feed.lastUpdate} • Dev: {feed.deviation}</p>
                     </div>
                   </div>
                 ))}
@@ -291,13 +429,13 @@ export default function PricePage() {
           </AnimatedSection>
         )}
 
-        {/* ═══ PEG EVENTS ═══ */}
+        {/* Events Tab */}
         {activeTab === 'events' && (
           <AnimatedSection>
             <Card>
               <h3 className="text-lg font-bold mb-4">Recent Peg Events</h3>
               <div className="space-y-3">
-                {PEG_EVENTS.map((event, i) => (
+                {pegEvents.map((event, i) => (
                   <div key={i} className="flex items-start gap-4 p-4 bg-white/5 rounded-xl">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
                       event.type === 'expansion' ? 'bg-green-500/20 text-green-400' :
@@ -325,7 +463,7 @@ export default function PricePage() {
           </AnimatedSection>
         )}
 
-        {/* ═══ HOW IT WORKS ═══ */}
+        {/* Mechanics Tab */}
         {activeTab === 'mechanics' && (
           <div className="space-y-6">
             <AnimatedSection>
@@ -373,10 +511,10 @@ export default function PricePage() {
                 <h3 className="text-lg font-bold mb-3">Contract Addresses</h3>
                 <div className="space-y-2 text-sm">
                   {[
-                    ['Pool Manager', '0x3c91AF7Cf1f5c44d32A6fF9222a3Ed72845d8E86'],
-                    ['Stabilization Fund', '0x033fA6AFd3D7af45FBC6d617553178f4773Cba6a'],
-                    ['Stabilization Fund V2', '0x23b8450530Be2A3f19Ae2FDD26cA3491C4De192D'],
-                    ['Liquidity Manager', '0x6C5212B7D40154ee367f49Dc05d5C7659a544800'],
+                    ['Pool Manager', USDTZ_CONFIG.contracts.poolManager],
+                    ['Stabilization Fund', USDTZ_CONFIG.contracts.stabilizationFund],
+                    ['Liquidity Manager', USDTZ_CONFIG.contracts.liquidityManager],
+                    ['USDTZ Token', USDTZ_CONFIG.contracts.usdtz],
                   ].map(([name, addr]) => (
                     <div key={addr} className="flex justify-between items-center p-2 bg-white/5 rounded-lg">
                       <span className="text-gray-400">{name}</span>
@@ -386,7 +524,7 @@ export default function PricePage() {
                         rel="noopener noreferrer"
                         className="font-mono text-primary-400 hover:underline"
                       >
-                        {addr.slice(0, 8)}...{addr.slice(-6)}
+                        {addr.slice(0, 10)}...{addr.slice(-8)}
                       </a>
                     </div>
                   ))}

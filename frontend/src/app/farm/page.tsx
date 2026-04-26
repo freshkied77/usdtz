@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Sprout, Flame, Gift } from 'lucide-react'
-import { useAccount, useContractRead, useContractReads } from 'wagmi'
-import { formatEther } from 'viem'
+import { useState, useMemo, useEffect } from 'react'
+import { Sprout, Flame, Gift, TrendingUp } from 'lucide-react'
+import { useAccount, useContractRead, useContractReads, useContractWrite, usePrepareContractWrite, usePublicClient, useWalletClient } from 'wagmi'
+import { formatEther, parseEther } from 'viem'
 import Layout from '@/components/Layout'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
@@ -17,51 +17,20 @@ import Skeleton from '@/components/ui/Skeleton'
 import { TokenPair } from '@/components/ui/TokenIcon'
 import { ABIS } from '@/lib/abis'
 import { USDTZ_CONFIG } from '@/lib/config'
-import { formatCurrency } from '@/lib/utils'
+import { buildTokenList } from '@/lib/api/coingecko'
 
 const LIQUIDITY_MINING_ADDRESS = USDTZ_CONFIG.contracts.liquidityMining as `0x${string}`
-const USDTZ_ADDRESS = USDTZ_CONFIG.contracts.usdtz as `0x${string}`
-const SECONDS_PER_YEAR_BIGINT = BigInt(31536000)
-
-// Known LP token pairs
-const KNOWN_LP_PAIRS: Record<number, { token0: string; token1: string; multiplier?: string; lpToken?: string }> = {
-  0: { token0: 'USDTZ', token1: 'BNB', multiplier: '2x', lpToken: '0xbAe7EAF2078f053857b472c2cAE4F63D0086b89F' },
-}
-
-const MAX_POOLS = 10
-const DEFAULT_TVL = 1000000
-
-// ─────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────
-interface PoolInfo {
-  allocation: bigint
-  totalStaked: bigint
-  active: boolean
-  startTime: bigint
-  endTime: bigint
-  remainingDays: bigint
-}
-
-interface UserPoolInfo {
-  amount: bigint
-  pendingRewards: bigint
-  totalEarned: bigint
-  lastClaimTime: bigint
-}
+const SECONDS_PER_YEAR = 31536000
 
 interface FarmData {
   index: number
   lpToken: string
   token0: string
   token1: string
-  apr: string
-  aprValue: number
-  tvl: string
-  tvlValue: number
+  apr: number
+  tvl: number
   multiplier: string
-  earned: string
-  earnedValue: number
+  earned: number
   isActive: boolean
   allocation: bigint
   totalStaked: bigint
@@ -70,86 +39,6 @@ interface FarmData {
   userTotalEarned: bigint
 }
 
-// ─────────────────────────────────────────────────────────────
-// Hook: useFarmsData - batch read all pool + user data
-// ─────────────────────────────────────────────────────────────
-function useFarmsData() {
-  const { address, isConnected } = useAccount()
-
-  // 1. Pool counter
-  const { data: poolCount } = useContractRead({
-    address: LIQUIDITY_MINING_ADDRESS,
-    abi: ABIS.LiquidityMining,
-    functionName: 'poolCounter',
-  })
-
-  // 2. Global stats
-  const { data: stats } = useContractRead({
-    address: LIQUIDITY_MINING_ADDRESS,
-    abi: ABIS.LiquidityMining,
-    functionName: 'getStats',
-  })
-
-  // 3. Rewards per second
-  const { data: rewardsPerSecond } = useContractRead({
-    address: LIQUIDITY_MINING_ADDRESS,
-    abi: ABIS.LiquidityMining,
-    functionName: 'currentRewardsPerSecond',
-  })
-
-  // Build indices for known pools only
-  const poolIndices = useMemo(() => {
-    if (!poolCount) return Object.keys(KNOWN_LP_PAIRS).map(Number)
-    const count = Number(poolCount)
-    return Array.from({ length: Math.min(count, MAX_POOLS) }, (_, i) => i)
-  }, [poolCount])
-
-  // Build batch read configs for pool infos
-  const poolReadConfigs = useMemo(() => {
-    return poolIndices.map((idx) => ({
-      address: LIQUIDITY_MINING_ADDRESS,
-      abi: ABIS.LiquidityMining,
-      functionName: 'getPoolInfo',
-      args: [BigInt(idx)] as const,
-    }))
-  }, [poolIndices])
-
-  // Batch read pool infos
-  const { data: poolInfosData, isLoading: isLoadingPools } = useContractReads({
-    contracts: poolReadConfigs,
-  })
-
-  // Build batch read configs for user infos
-  const userReadConfigs = useMemo(() => {
-    if (!isConnected || !address) return []
-    return poolIndices.map((idx) => ({
-      address: LIQUIDITY_MINING_ADDRESS,
-      abi: ABIS.LiquidityMining,
-      functionName: 'getUserInfo',
-      args: [BigInt(idx), address] as const,
-    }))
-  }, [poolIndices, isConnected, address])
-
-  const { data: userInfosData, isLoading: isLoadingUser } = useContractReads({
-    contracts: userReadConfigs,
-  })
-
-  const isLoading = isLoadingPools || isLoadingUser || !poolCount
-
-  return {
-    poolCount: poolCount as bigint | undefined,
-    poolIndices,
-    poolInfosData,
-    userInfosData,
-    stats: stats as { _totalRewardsDistributed: bigint; _totalStakedValue: bigint; _poolCount: bigint; _currentRewardsPerSecond: bigint; _totalReferralRewards: bigint } | undefined,
-    rewardsPerSecond: rewardsPerSecond as bigint | undefined,
-    isLoading,
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Component: Skeleton loader
-// ─────────────────────────────────────────────────────────────
 function FarmCardSkeleton() {
   return (
     <Card>
@@ -159,257 +48,297 @@ function FarmCardSkeleton() {
           <div className="space-y-2">
             <Skeleton variant="text" className="w-24 h-5" />
             <div className="flex gap-2">
-              <Skeleton variant="text" className="w-16 h-5" />
-              <Skeleton variant="text" className="w-10 h-5" />
+              <Skeleton variant="text" className="w-16 h-4" />
+              <Skeleton variant="text" className="w-16 h-4" />
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-6">
-          <div className="text-center hidden sm:block">
-            <Skeleton variant="text" className="w-16 h-4" />
-            <Skeleton variant="text" className="w-12 h-6 mt-1" />
-          </div>
-          <div className="text-center hidden sm:block">
-            <Skeleton variant="text" className="w-16 h-4" />
-            <Skeleton variant="text" className="w-12 h-6 mt-1" />
-          </div>
-          <div className="flex gap-2">
-            <Skeleton variant="text" className="w-16 h-8" />
-            <Skeleton variant="text" className="w-16 h-8" />
-          </div>
+        <div className="flex gap-4">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} variant="text" className="w-20 h-10" />
+          ))}
         </div>
       </div>
     </Card>
   )
 }
 
-// ─────────────────────────────────────────────────────────────
-// Component: Farm Card (All Farms tab)
-// ─────────────────────────────────────────────────────────────
-function FarmCard({ farm, index }: { farm: FarmData; index: number }) {
-  return (
-    <AnimatedSection delay={index * 0.05}>
-      <Card variant="interactive">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-4">
-            <TokenPair token0={farm.token0} token1={farm.token1} size="lg" />
-            <div>
-              <h3 className="text-lg font-bold">{farm.token0}-{farm.token1}</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge variant="success">{farm.apr} APR</Badge>
-                <Badge variant="primary">{farm.multiplier}</Badge>
-                {farm.isActive && <Badge variant="success" dot>Active</Badge>}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <div className="text-center hidden sm:block">
-              <p className="text-gray-400 text-xs">TVL</p>
-              <p className="text-lg font-semibold">{farm.tvl}</p>
-            </div>
-            <div className="text-center hidden sm:block">
-              <p className="text-gray-400 text-xs">Earned</p>
-              <p className="text-lg font-semibold text-green-400">{farm.earned}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="secondary" size="sm">View</Button>
-              <Button size="sm">Stake</Button>
-            </div>
-          </div>
-        </div>
-      </Card>
-    </AnimatedSection>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────
-// Component: Staked Farm Card (My Farms tab)
-// ─────────────────────────────────────────────────────────────
-function StakedFarmCard({ farm, index }: { farm: FarmData; index: number }) {
-  const stakedAmount = farm.userAmount > BigInt(0) ? formatEther(farm.userAmount).split('.')[0] : '0'
-  const pendingRewards = farm.userPendingRewards > BigInt(0) ? formatEther(farm.userPendingRewards).split('.')[0] : '0'
-
-  return (
-    <AnimatedSection delay={index * 0.1}>
-      <Card variant="highlight">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <TokenPair token0={farm.token0} token1={farm.token1} size="lg" />
-            <div>
-              <h3 className="text-lg font-bold">{farm.token0}-{farm.token1}</h3>
-              <p className="text-sm text-gray-400">APR {farm.apr}</p>
-            </div>
-          </div>
-          <Badge variant="success" dot>Staked</Badge>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-          <div className="p-3 bg-white/5 rounded-xl">
-            <p className="text-gray-400 text-xs mb-1">Staked</p>
-            <p className="text-lg font-semibold">{stakedAmount} {farm.token0}</p>
-          </div>
-          <div className="p-3 bg-white/5 rounded-xl">
-            <p className="text-gray-400 text-xs mb-1">Value</p>
-            <p className="text-lg font-semibold">{farm.tvl}</p>
-          </div>
-          <div className="p-3 bg-white/5 rounded-xl">
-            <p className="text-gray-400 text-xs mb-1">Rewards</p>
-            <p className="text-lg font-semibold text-green-400">{pendingRewards} {farm.token0}</p>
-          </div>
-          <div className="p-3 bg-white/5 rounded-xl">
-            <p className="text-gray-400 text-xs mb-1">APR</p>
-            <p className="text-lg font-semibold text-green-400">{farm.apr}</p>
-          </div>
-        </div>
-
-        <div className="flex gap-3">
-          <Button variant="secondary" className="flex-1">Add</Button>
-          <Button variant="outline" className="flex-1">Claim</Button>
-          <Button variant="danger" className="flex-1">Unstake</Button>
-        </div>
-      </Card>
-    </AnimatedSection>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────
-// Main Farm Page Component
-// ─────────────────────────────────────────────────────────────
 export default function FarmPage() {
   const { address, isConnected } = useAccount()
+  const publicClient = usePublicClient()
+  const { data: walletClient } = useWalletClient()
   const [activeTab, setActiveTab] = useState('all')
   const [sortBy, setSortBy] = useState('tvl')
+  const [farms, setFarms] = useState<FarmData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<number | null>(null)
+  const [actionError, setActionError] = useState('')
+  const [txHash, setTxHash] = useState<string | null>(null)
 
-  const {
-    poolCount,
-    poolIndices,
-    poolInfosData,
-    userInfosData,
-    stats,
-    rewardsPerSecond,
-    isLoading,
-  } = useFarmsData()
-
-  // Build farms array from batched pool data
-  const farms: FarmData[] = useMemo(() => {
-    if (!poolInfosData) return []
-
-    const result: FarmData[] = []
-
-    poolIndices.forEach((idx) => {
-      const poolInfoRaw = poolInfosData[idx]
-      const userInfoRaw = userInfosData?.[idx]
-
-      if (!poolInfoRaw || poolInfoRaw.status === 'failure') return
-
-      const poolInfo = poolInfoRaw.result as PoolInfo | undefined
-      if (!poolInfo) return
-
-      const [allocation = BigInt(0), totalStaked = BigInt(0), active = false, startTime = BigInt(0), endTime = BigInt(0)] = Array.isArray(poolInfoRaw.result)
-        ? poolInfoRaw.result
-        : []
-
-      const userInfo = userInfoRaw?.result as UserPoolInfo | undefined
-      const [userAmount = BigInt(0), userPendingRewards = BigInt(0), userTotalEarned = BigInt(0)] = userInfo
-        ? [userInfo.amount, userInfo.pendingRewards, userInfo.totalEarned]
-        : []
-
-      // Find known pair by index
-      const knownPair = KNOWN_LP_PAIRS[idx]
-      const token0 = knownPair?.token0 || 'USDTZ'
-      const token1 = knownPair?.token1 || `Pool ${idx}`
-      const multiplier = knownPair?.multiplier || '1x'
-
-      // Calculate TVL
-      const tvlValue = Number(formatEther(totalStaked))
-      const tvlFormatted = tvlValue >= 1_000_000
-        ? `$${(tvlValue / 1_000_000).toFixed(1)}M`
-        : tvlValue >= 1_000
-          ? `$${(tvlValue / 1_000).toFixed(1)}K`
-          : tvlValue > 0 ? `$${tvlValue.toFixed(0)}` : '$0'
-
-      // Calculate APR
-      let aprValue = 0
-      if (stats && rewardsPerSecond) {
-        const totalPools = Number(stats._poolCount || BigInt(1))
-        const poolWeight = totalPools > 0 ? Number(allocation) / (totalPools * 100) : 0
-        const annualRewards = Number(rewardsPerSecond) * Number(SECONDS_PER_YEAR_BIGINT)
-        const annualRewardsForPool = annualRewards * poolWeight
-        const divisor = tvlValue > 0 ? tvlValue : DEFAULT_TVL
-        aprValue = (annualRewardsForPool / divisor) * 100
-      }
-
-      const earnedFormatted = userPendingRewards > BigInt(0)
-        ? formatEther(userPendingRewards).split('.')[0]
-        : '0'
-
-      result.push({
-        index: idx,
-        lpToken: knownPair?.lpToken || `pool-${idx}`,
-        token0,
-        token1,
-        apr: `${aprValue.toFixed(1)}%`,
-        aprValue,
-        tvl: tvlFormatted,
-        tvlValue: tvlValue || DEFAULT_TVL,
-        multiplier,
-        earned: earnedFormatted,
-        earnedValue: Number(earnedFormatted),
-        isActive: active,
-        allocation,
-        totalStaked,
-        userAmount,
-        userPendingRewards,
-        userTotalEarned,
+  const handleStake = async (poolIndex: number, amount: string) => {
+    if (!address || !publicClient || !walletClient) return
+    setActionLoading(poolIndex)
+    setActionError('')
+    try {
+      const farm = farms.find(f => f.index === poolIndex)
+      if (!farm) return
+      
+      const { request } = await publicClient.simulateContract({
+        address: LIQUIDITY_MINING_ADDRESS,
+        abi: ABIS.LiquidityMining,
+        functionName: 'deposit',
+        args: [farm.lpToken as `0x${string}`, farm.userAmount, '0x0000000000000000000000000000000000000000'],
+        account: address,
       })
-    })
+      const hash = await walletClient.writeContract(request)
+      setTxHash(hash)
+    } catch (error: any) {
+      console.error('Stake failed:', error)
+      setActionError(error?.shortMessage || 'Stake failed')
+    } finally {
+      setActionLoading(null)
+    }
+  }
 
-    return result
-  }, [poolIndices, poolInfosData, userInfosData, stats, rewardsPerSecond])
+  const handleUnstake = async (poolIndex: number, amount: string) => {
+    if (!address || !publicClient || !walletClient) return
+    setActionLoading(poolIndex)
+    setActionError('')
+    try {
+      const farm = farms.find(f => f.index === poolIndex)
+      if (!farm) return
+      
+      const { request } = await publicClient.simulateContract({
+        address: LIQUIDITY_MINING_ADDRESS,
+        abi: ABIS.LiquidityMining,
+        functionName: 'withdraw',
+        args: [farm.lpToken as `0x${string}`, farm.userAmount],
+        account: address,
+      })
+      const hash = await walletClient.writeContract(request)
+      setTxHash(hash)
+    } catch (error: any) {
+      console.error('Unstake failed:', error)
+      setActionError(error?.shortMessage || 'Unstake failed')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleHarvest = async (poolIndex: number) => {
+    if (!address || !publicClient || !walletClient) return
+    setActionLoading(poolIndex)
+    setActionError('')
+    try {
+      const farm = farms.find(f => f.index === poolIndex)
+      if (!farm) return
+      
+      const { request } = await publicClient.simulateContract({
+        address: LIQUIDITY_MINING_ADDRESS,
+        abi: ABIS.LiquidityMining,
+        functionName: 'claimReward',
+        args: [farm.lpToken as `0x${string}`],
+        account: address,
+      })
+      const hash = await walletClient.writeContract(request)
+      setTxHash(hash)
+    } catch (error: any) {
+      console.error('Harvest failed:', error)
+      setActionError(error?.shortMessage || 'Harvest failed')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleHarvestAll = async () => {
+    if (!address || !publicClient || !walletClient || stakedFarms.length === 0) return
+    setActionLoading(-1)
+    setActionError('')
+    try {
+      for (const farm of stakedFarms) {
+        const { request } = await publicClient.simulateContract({
+          address: LIQUIDITY_MINING_ADDRESS,
+          abi: ABIS.LiquidityMining,
+          functionName: 'claimReward',
+          args: [farm.lpToken as `0x${string}`],
+          account: address,
+        })
+        await walletClient.writeContract(request)
+      }
+    } catch (error: any) {
+      console.error('Harvest all failed:', error)
+      setActionError(error?.shortMessage || 'Harvest all failed')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  // Get pool count
+  const { data: poolCount } = useContractRead({
+    address: LIQUIDITY_MINING_ADDRESS,
+    abi: ABIS.LiquidityMining,
+    functionName: 'poolCounter',
+  })
+
+  // Get global stats
+  const { data: stats } = useContractRead({
+    address: LIQUIDITY_MINING_ADDRESS,
+    abi: ABIS.LiquidityMining,
+    functionName: 'getStats',
+  })
+
+  // Get rewards per second
+  const { data: rewardsPerSecond } = useContractRead({
+    address: LIQUIDITY_MINING_ADDRESS,
+    abi: ABIS.LiquidityMining,
+    functionName: 'currentRewardsPerSecond',
+  })
+
+  // Build pool indices
+  const poolIndices = useMemo(() => {
+    if (!poolCount) return [0, 1, 2] // Default pools
+    const count = Number(poolCount)
+    return Array.from({ length: Math.min(count, 10) }, (_, i) => i)
+  }, [poolCount])
+
+  // Batch read pool infos
+  const poolReadConfigs = useMemo(() => 
+    poolIndices.map((idx) => ({
+      address: LIQUIDITY_MINING_ADDRESS,
+      abi: ABIS.LiquidityMining,
+      functionName: 'getPoolInfo' as const,
+      args: [BigInt(idx)] as const,
+    })),
+    [poolIndices]
+  )
+
+  const { data: poolInfosData, isLoading: isLoadingPools } = useContractReads({
+    contracts: poolReadConfigs,
+  })
+
+  // Batch read user infos
+  const userReadConfigs = useMemo(() => {
+    if (!isConnected || !address) return []
+    return poolIndices.map((idx) => ({
+      address: LIQUIDITY_MINING_ADDRESS,
+      abi: ABIS.LiquidityMining,
+      functionName: 'getUserInfo' as const,
+      args: [BigInt(idx), address] as const,
+    }))
+  }, [poolIndices, isConnected, address])
+
+  const { data: userInfosData, isLoading: isLoadingUser } = useContractReads({
+    contracts: userReadConfigs,
+  })
+
+  // Build farm data
+  useEffect(() => {
+    async function buildFarms() {
+      setLoading(isLoadingPools || isLoadingUser || !poolInfosData)
+      if (!poolInfosData) return
+
+      const farmData: FarmData[] = poolIndices.map((idx, i) => {
+        const poolInfo = poolInfosData[i]?.result
+        const userInfo = userInfosData?.[i]?.result
+
+        if (!poolInfo || !Array.isArray(poolInfo) || poolInfo.length < 6) {
+          return null
+        }
+
+        const [allocation, totalStaked, active, startTime, endTime, remainingDays] = poolInfo as [
+          bigint, bigint, boolean, bigint, bigint, bigint
+        ]
+
+        const userAmount = userInfo && Array.isArray(userInfo) ? userInfo[0] || BigInt(0) : BigInt(0)
+        const pendingRewards = userInfo && Array.isArray(userInfo) ? userInfo[1] || BigInt(0) : BigInt(0)
+        const totalEarned = userInfo && Array.isArray(userInfo) ? userInfo[2] || BigInt(0) : BigInt(0)
+
+        // Calculate APR
+        const tvlNum = Number(formatEther(totalStaked))
+        const rewardsPerSec = rewardsPerSecond ? Number(formatEther(rewardsPerSecond)) : 0
+        const allocationNum = Number(allocation)
+        const totalAllocation = poolInfosData?.reduce((sum, p) => sum + Number((p.result as bigint[] | undefined)?.[0] || BigInt(0)), 0) || 1
+        
+        const poolRewardsPerSec = (rewardsPerSec * allocationNum) / totalAllocation
+        const yearlyRewards = poolRewardsPerSec * SECONDS_PER_YEAR
+        const apr = tvlNum > 0 ? ((yearlyRewards / tvlNum) * 100) : 0
+
+        // Mock token pair data (in production, get from LP token contract)
+        const tokenPairs = [
+          { token0: 'USDTZ', token1: 'BNB', lpToken: '0x...' },
+          { token0: 'USDTZ', token1: 'USDT', lpToken: '0x...' },
+          { token0: 'USDTZ', token1: 'BUSD', lpToken: '0x...' },
+        ]
+        const pair = tokenPairs[idx % tokenPairs.length]
+
+        return {
+          index: idx,
+          lpToken: pair.lpToken,
+          token0: pair.token0,
+          token1: pair.token1,
+          apr,
+          tvl: tvlNum,
+          multiplier: allocationNum > 100 ? '2x' : '1x',
+          earned: Number(formatEther(pendingRewards)),
+          isActive: active && remainingDays > BigInt(0),
+          allocation,
+          totalStaked,
+          userAmount,
+          userPendingRewards: pendingRewards,
+          userTotalEarned: totalEarned,
+        } as FarmData
+      }).filter((f): f is FarmData => f !== null)
+
+      setFarms(farmData)
+      setLoading(false)
+    }
+
+    buildFarms()
+  }, [poolInfosData, userInfosData, isLoadingPools, isLoadingUser, rewardsPerSecond, poolIndices])
 
   // Sort farms
   const sortedFarms = useMemo(() => {
-    const sorted = [...farms]
-    switch (sortBy) {
-      case 'tvl':
-        sorted.sort((a, b) => b.tvlValue - a.tvlValue)
-        break
-      case 'apr':
-        sorted.sort((a, b) => b.aprValue - a.aprValue)
-        break
-      default:
-        break
-    }
+    let sorted = [...farms]
+    if (sortBy === 'tvl') sorted.sort((a, b) => b.tvl - a.tvl)
+    if (sortBy === 'apr') sorted.sort((a, b) => b.apr - a.apr)
+    if (sortBy === 'name') sorted.sort((a, b) => a.token0.localeCompare(b.token0))
     return sorted
   }, [farms, sortBy])
 
-  // Filter farms with user stake
-  const stakedFarms = useMemo(() => {
-    return farms.filter(f => f.userAmount > BigInt(0))
-  }, [farms])
+  const stakedFarms = useMemo(() => 
+    farms.filter(f => f.userAmount > BigInt(0)),
+    [farms]
+  )
 
-  // Calculate aggregate stats
-  const totalStakedValue = useMemo(() => {
-    return farms.reduce((sum, f) => sum + f.tvlValue, 0)
-  }, [farms])
+  const totalStakedValue = useMemo(() => 
+    farms.reduce((sum, f) => sum + f.tvl, 0),
+    [farms]
+  )
 
-  const totalUserStaked = useMemo(() => {
-    return stakedFarms.reduce((sum, f) => {
-      const userStakedValue = f.tvlValue * (Number(formatEther(f.userAmount)) / f.tvlValue)
+  const totalUserStaked = useMemo(() => 
+    stakedFarms.reduce((sum, f) => {
+      const userStakedValue = f.tvl * (Number(formatEther(f.userAmount)) / f.tvl)
       return sum + (isNaN(userStakedValue) ? 0 : userStakedValue)
-    }, 0)
-  }, [stakedFarms])
+    }, 0),
+    [stakedFarms]
+  )
 
-  const totalPendingRewards = useMemo(() => {
-    return stakedFarms.reduce((sum, f) => sum + Number(formatEther(f.userPendingRewards)), 0)
-  }, [stakedFarms])
+  const totalPendingRewards = useMemo(() => 
+    stakedFarms.reduce((sum, f) => sum + Number(formatEther(f.userPendingRewards)), 0),
+    [stakedFarms]
+  )
 
-  const averageApr = useMemo(() => {
-    if (farms.length === 0) return '0%'
-    const totalApr = farms.reduce((sum, f) => sum + f.aprValue, 0)
-    return `${(totalApr / farms.length).toFixed(1)}%`
-  }, [farms])
+  const averageApr = useMemo(() => 
+    farms.length > 0 ? `${(farms.reduce((sum, f) => sum + f.apr, 0) / farms.length).toFixed(1)}%` : '0%',
+    [farms]
+  )
+
+  const formatUSD = (value: number) => {
+    if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`
+    if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`
+    if (value >= 1e3) return `$${(value / 1e3).toFixed(2)}K`
+    return `$${value.toFixed(2)}`
+  }
 
   return (
     <Layout>
@@ -418,7 +347,11 @@ export default function FarmPage() {
           title="Yield Farming"
           subtitle="Stake LP tokens to earn USDTZ rewards"
           action={
-            <Button disabled={!isConnected || stakedFarms.length === 0}>
+            <Button 
+              disabled={!isConnected || stakedFarms.length === 0}
+              onClick={handleHarvestAll}
+              loading={actionLoading === -1}
+            >
               <Gift className="w-4 h-4" />
               Claim All Rewards
             </Button>
@@ -430,20 +363,20 @@ export default function FarmPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard
               label="Total Staked"
-              value={isLoading ? '...' : formatCurrency(totalStakedValue)}
+              value={loading ? '...' : formatUSD(totalStakedValue)}
               icon={<Sprout className="w-5 h-5" />}
             />
             <StatCard
               label="Your Staked"
-              value={!isConnected ? 'Connect' : isLoading ? '...' : formatCurrency(totalUserStaked)}
+              value={!isConnected ? 'Connect' : loading ? '...' : formatUSD(totalUserStaked)}
             />
             <StatCard
               label="Pending Rewards"
-              value={!isConnected ? '0' : isLoading ? '...' : formatCurrency(totalPendingRewards)}
+              value={!isConnected ? '0' : loading ? '...' : formatUSD(totalPendingRewards)}
             />
             <StatCard
               label="Average APR"
-              value={isLoading ? '...' : averageApr}
+              value={loading ? '...' : averageApr}
               icon={<Flame className="w-5 h-5" />}
             />
           </div>
@@ -475,13 +408,51 @@ export default function FarmPage() {
         {/* All Farms */}
         {activeTab === 'all' && (
           <div className="space-y-3">
-            {isLoading ? (
+            {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <FarmCardSkeleton key={i} />
               ))
             ) : sortedFarms.length > 0 ? (
-              sortedFarms.map((farm, i) => (
-                <FarmCard key={farm.lpToken} farm={farm} index={i} />
+              sortedFarms.map((farm) => (
+                <Card key={farm.lpToken} variant="interactive">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-4">
+                      <TokenPair token0={farm.token0} token1={farm.token1} size="lg" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold">{farm.token0}-{farm.token1}</span>
+                          {farm.multiplier !== '1x' && (
+                            <Badge variant="primary" size="sm">{farm.multiplier}</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-gray-400">
+                          <span>TVL: {formatUSD(farm.tvl)}</span>
+                          <span>•</span>
+                          <span className="text-green-400 font-medium">{farm.apr.toFixed(2)}% APR</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {farm.userAmount > BigInt(0) ? (
+                        <>
+                          <div className="text-right mr-4">
+                            <p className="text-sm text-gray-400">Staked</p>
+                            <p className="font-semibold">{formatUSD(Number(formatEther(farm.userAmount)))}</p>
+                            <p className="text-xs text-green-400">+{formatUSD(farm.earned)} earned</p>
+                          </div>
+                          <Button variant="outline" size="sm" onClick={() => handleHarvest(farm.index)} loading={actionLoading === farm.index}>Harvest</Button>
+                          <Button size="sm" onClick={() => handleUnstake(farm.index, '')} loading={actionLoading === farm.index}>Unstake</Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button variant="outline" size="sm">View Details</Button>
+                          <Button size="sm" onClick={() => handleStake(farm.index, '')} loading={actionLoading === farm.index}>Stake</Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </Card>
               ))
             ) : (
               <Card className="text-center py-16">
@@ -503,8 +474,28 @@ export default function FarmPage() {
                 <p className="text-gray-400">Connect your wallet to see your staked farms</p>
               </Card>
             ) : stakedFarms.length > 0 ? (
-              stakedFarms.map((farm, i) => (
-                <StakedFarmCard key={farm.lpToken} farm={farm} index={i} />
+              stakedFarms.map((farm) => (
+                <Card key={farm.lpToken} variant="interactive">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-4">
+                      <TokenPair token0={farm.token0} token1={farm.token1} size="lg" />
+                      <div>
+                        <span className="text-lg font-bold">{farm.token0}-{farm.token1}</span>
+                        <p className="text-sm text-gray-400">
+                          Staked: {formatUSD(Number(formatEther(farm.userAmount)))}
+                        </p>
+                        <p className="text-sm text-green-400">
+                          Pending: {formatUSD(farm.earned)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <Button variant="outline" size="sm" onClick={() => handleStake(farm.index, '')} loading={actionLoading === farm.index}>Add More</Button>
+                      <Button size="sm" onClick={() => handleHarvest(farm.index)} loading={actionLoading === farm.index}>Harvest</Button>
+                      <Button variant="secondary" size="sm" onClick={() => handleUnstake(farm.index, '')} loading={actionLoading === farm.index}>Unstake</Button>
+                    </div>
+                  </div>
+                </Card>
               ))
             ) : (
               <Card className="text-center py-16">
@@ -531,7 +522,7 @@ export default function FarmPage() {
             <div className="grid md:grid-cols-3 gap-6">
               {[
                 { step: '1', title: 'Add Liquidity', desc: 'Provide liquidity to our pools to receive LP tokens' },
-                { step: '2', title: 'Stake LP Tokens', desc: 'Stake your LP tokens in our farms to start earning' },
+                { step: '2', title: 'Stake LP Tokens', desc: 'Stake your LP tokens in farms to start earning' },
                 { step: '3', title: 'Harvest Rewards', desc: 'Claim your USDTZ rewards and reinvest' },
               ].map((item) => (
                 <div key={item.step} className="text-center">

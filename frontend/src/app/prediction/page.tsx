@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { BrainCircuit, Plus } from 'lucide-react'
+import { useAccount, usePublicClient, useWalletClient, useContractRead, useContractReads } from 'wagmi'
+import { parseEther, formatEther } from 'viem'
 import Layout from '@/components/Layout'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
@@ -11,6 +13,24 @@ import Modal from '@/components/ui/Modal'
 import Input from '@/components/ui/Input'
 import PageHeader from '@/components/ui/PageHeader'
 import AnimatedSection from '@/components/ui/AnimatedSection'
+import { ABIS } from '@/lib/abis'
+import { USDTZ_CONFIG } from '@/lib/config'
+
+const PREDICTION_MARKET_ADDRESS = USDTZ_CONFIG.contracts.predictionMarket as `0x${string}`
+const USDTZ_ADDRESS = USDTZ_CONFIG.contracts.usdtz as `0x${string}`
+
+const ERC20_APPROVE_ABI = [
+  {
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    name: 'approve',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const
 
 interface Market {
   id: number
@@ -26,14 +46,13 @@ interface Market {
   userBetNo: number
 }
 
-const INITIAL_MARKETS: Market[] = [
-  { id: 0, question: 'Will USDTZ reach $1.05 by end of Q2 2026?', resolveTime: new Date('2026-06-30'), totalYES: 125000, totalNO: 85000, yesOdds: 1.42, noOdds: 0.58, resolved: false, userBetYes: 100, userBetNo: 0 },
-  { id: 1, question: 'Will BNB Chain surpass Ethereum in daily transactions by Q3 2026?', resolveTime: new Date('2026-09-30'), totalYES: 45000, totalNO: 72000, yesOdds: 0.63, noOdds: 1.61, resolved: false, userBetYes: 0, userBetNo: 200 },
-  { id: 2, question: 'Will USDTZ be listed on major CEX by Q4 2026?', resolveTime: new Date('2026-12-31'), totalYES: 89000, totalNO: 43000, yesOdds: 2.07, noOdds: 0.48, resolved: false, userBetYes: 500, userBetNo: 0 },
-]
-
 export default function PredictionPage() {
-  const [markets, setMarkets] = useState<Market[]>(INITIAL_MARKETS)
+  const { address, isConnected } = useAccount()
+  const publicClient = usePublicClient()
+  const { data: walletClient } = useWalletClient()
+
+  const [markets, setMarkets] = useState<Market[]>([])
+  const [loading, setLoading] = useState(true)
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null)
   const [betAmount, setBetAmount] = useState('')
   const [betSide, setBetSide] = useState<'YES' | 'NO'>('YES')
@@ -41,37 +60,147 @@ export default function PredictionPage() {
   const [newQ, setNewQ] = useState('')
   const [newDate, setNewDate] = useState('')
   const [newLiq, setNewLiq] = useState('')
+  const [isBetting, setIsBetting] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [error, setError] = useState('')
+  const [txHash, setTxHash] = useState<string | null>(null)
 
-  const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toString()
+  const { data: marketCounter } = useContractRead({
+    address: PREDICTION_MARKET_ADDRESS,
+    abi: ABIS.PredictionMarket,
+    functionName: 'marketCounter',
+    watch: true,
+  })
+
+  const marketIndices = useMemo(() => {
+    if (!marketCounter) return []
+    const count = Number(marketCounter)
+    return Array.from({ length: Math.min(count, 20) }, (_, i) => i)
+  }, [marketCounter])
+
+  const marketReadConfigs = useMemo(() =>
+    marketIndices.map((idx) => ({
+      address: PREDICTION_MARKET_ADDRESS,
+      abi: ABIS.PredictionMarket,
+      functionName: 'getMarketInfo' as const,
+      args: [BigInt(idx)] as const,
+    })),
+    [marketIndices]
+  )
+
+  const { data: marketInfosData, isLoading: isLoadingMarkets } = useContractReads({
+    contracts: marketReadConfigs,
+  })
+
+  useEffect(() => {
+    if (isLoadingMarkets || !marketInfosData) {
+      setLoading(isLoadingMarkets)
+      return
+    }
+
+    const parsed: Market[] = marketIndices.map((idx, i) => {
+      const info = marketInfosData[i]
+      if (!info || !info.result || !Array.isArray(info.result)) return null
+
+      const result = info.result as unknown as any[]
+      const [question, resolveTime, resolved, answer, totalYes, totalNo, yesOdds, noOdds] = result
+
+      return {
+        id: idx,
+        question,
+        resolveTime: new Date(Number(resolveTime) * 1000),
+        resolved,
+        answer,
+        totalYES: Number(formatEther(totalYes || BigInt(0))),
+        totalNO: Number(formatEther(totalNo || BigInt(0))),
+        yesOdds: Number(yesOdds || BigInt(0)) / 1000,
+        noOdds: Number(noOdds || BigInt(0)) / 1000,
+        userBetYes: 0,
+        userBetNo: 0,
+      } as Market
+    }).filter((m): m is Market => m !== null && m.question !== '')
+
+    setMarkets(parsed)
+    setLoading(false)
+  }, [marketInfosData, isLoadingMarkets, marketIndices])
+
+  const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toFixed(0)
   const fmtTime = (d: Date) => {
     const days = Math.floor((d.getTime() - Date.now()) / 86400000)
-    return days > 30 ? d.toLocaleDateString() : `${days}d left`
+    return days > 30 ? d.toLocaleDateString() : days > 0 ? `${days}d left` : 'Ended'
   }
 
-  const placeBet = () => {
-    if (!selectedMarket || !betAmount) return
-    const amt = parseFloat(betAmount)
-    setMarkets(ms => ms.map(m => m.id === selectedMarket.id ? {
-      ...m,
-      totalYES: betSide === 'YES' ? m.totalYES + amt : m.totalYES,
-      totalNO: betSide === 'NO' ? m.totalNO + amt : m.totalNO,
-      userBetYes: betSide === 'YES' ? m.userBetYes + amt : m.userBetYes,
-      userBetNo: betSide === 'NO' ? m.userBetNo + amt : m.userBetNo,
-    } : m))
-    setSelectedMarket(null)
-    setBetAmount('')
+  const placeBet = async () => {
+    if (!selectedMarket || !betAmount || !address || !publicClient || !walletClient) return
+    setIsBetting(true)
+    setError('')
+    setTxHash(null)
+    try {
+      const amount = parseEther(betAmount)
+
+      const { request: approveReq } = await publicClient.simulateContract({
+        address: USDTZ_ADDRESS,
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [PREDICTION_MARKET_ADDRESS, amount],
+        account: address,
+      })
+      await walletClient.writeContract(approveReq)
+
+      const { request } = await publicClient.simulateContract({
+        address: PREDICTION_MARKET_ADDRESS,
+        abi: ABIS.PredictionMarket,
+        functionName: 'placeBet',
+        args: [BigInt(selectedMarket.id), betSide === 'YES', amount],
+        account: address,
+      })
+      const hash = await walletClient.writeContract(request)
+      setTxHash(hash)
+      setSelectedMarket(null)
+      setBetAmount('')
+    } catch (err: any) {
+      console.error('Place bet failed:', err)
+      setError(err?.shortMessage || 'Bet failed — check USDTZ balance and approval')
+    } finally {
+      setIsBetting(false)
+    }
   }
 
-  const createMarket = () => {
-    if (!newQ || !newDate || !newLiq) return
-    const liq = parseFloat(newLiq)
-    setMarkets([...markets, {
-      id: markets.length, question: newQ, resolveTime: new Date(newDate),
-      totalYES: liq * 0.5, totalNO: liq * 0.5, yesOdds: 2.0, noOdds: 2.0,
-      resolved: false, userBetYes: 0, userBetNo: 0,
-    }])
-    setShowCreate(false)
-    setNewQ(''); setNewDate(''); setNewLiq('')
+  const createMarket = async () => {
+    if (!newQ || !newDate || !newLiq || !address || !publicClient || !walletClient) return
+    setIsCreating(true)
+    setError('')
+    setTxHash(null)
+    try {
+      const liq = parseEther(newLiq)
+      const resolveTimestamp = BigInt(Math.floor(new Date(newDate).getTime() / 1000))
+
+      const { request: approveReq } = await publicClient.simulateContract({
+        address: USDTZ_ADDRESS,
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [PREDICTION_MARKET_ADDRESS, liq],
+        account: address,
+      })
+      await walletClient.writeContract(approveReq)
+
+      const { request } = await publicClient.simulateContract({
+        address: PREDICTION_MARKET_ADDRESS,
+        abi: ABIS.PredictionMarket,
+        functionName: 'createMarket',
+        args: [newQ, resolveTimestamp, liq],
+        account: address,
+      })
+      const hash = await walletClient.writeContract(request)
+      setTxHash(hash)
+      setShowCreate(false)
+      setNewQ(''); setNewDate(''); setNewLiq('')
+    } catch (err: any) {
+      console.error('Create market failed:', err)
+      setError(err?.shortMessage || 'Create market failed — check USDTZ balance')
+    } finally {
+      setIsCreating(false)
+    }
   }
 
   return (
@@ -81,7 +210,7 @@ export default function PredictionPage() {
           title="Prediction Market"
           subtitle="Trade on future events with USDTZ"
           action={
-            <Button onClick={() => setShowCreate(true)}>
+            <Button onClick={() => { setShowCreate(true); setError(''); setTxHash(null); }} disabled={!isConnected}>
               <Plus className="w-4 h-4" />
               Create Market
             </Button>
@@ -89,60 +218,77 @@ export default function PredictionPage() {
         />
 
         <AnimatedSection>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {markets.map((m, i) => (
-              <motion.div
-                key={m.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-              >
-                <Card variant="interactive" className="cursor-pointer h-full" onClick={() => setSelectedMarket(m)}>
-                  <div className="flex items-start justify-between mb-4">
-                    <Badge variant={m.resolved ? 'success' : 'primary'}>
-                      {m.resolved ? (m.answer ? 'YES' : 'NO') : 'Open'}
-                    </Badge>
-                    <span className="text-xs text-gray-500">{fmtTime(m.resolveTime)}</span>
-                  </div>
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[...Array(3)].map((_, i) => (
+                <Card key={i} className="h-48 animate-pulse bg-white/5"><div /></Card>
+              ))}
+            </div>
+          ) : markets.length === 0 ? (
+            <Card className="p-12 text-center">
+              <BrainCircuit className="w-12 h-12 mx-auto mb-4 text-gray-500" />
+              <h3 className="text-xl font-semibold mb-2">No Markets Yet</h3>
+              <p className="text-gray-400 mb-4">Be the first to create a prediction market</p>
+              <Button onClick={() => setShowCreate(true)} disabled={!isConnected}>
+                <Plus className="w-4 h-4" /> Create Market
+              </Button>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {markets.map((m, i) => (
+                <motion.div
+                  key={m.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.1 }}
+                >
+                  <Card variant="interactive" className="cursor-pointer h-full" onClick={() => { setSelectedMarket(m); setError(''); setTxHash(null); }}>
+                    <div className="flex items-start justify-between mb-4">
+                      <Badge variant={m.resolved ? 'success' : 'primary'}>
+                        {m.resolved ? (m.answer ? 'YES' : 'NO') : 'Open'}
+                      </Badge>
+                      <span className="text-xs text-gray-500">{fmtTime(m.resolveTime)}</span>
+                    </div>
 
-                  <h3 className="text-base font-semibold mb-5 leading-snug line-clamp-2">{m.question}</h3>
+                    <h3 className="text-base font-semibold mb-5 leading-snug line-clamp-2">{m.question}</h3>
 
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-400">YES</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-green-400">{m.yesOdds.toFixed(2)}x</span>
-                        <span className="text-xs text-gray-500">{fmt(m.totalYES)}</span>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">YES</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-green-400">{m.yesOdds.toFixed(2)}x</span>
+                          <span className="text-xs text-gray-500">{fmt(m.totalYES)}</span>
+                        </div>
+                      </div>
+                      <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all"
+                          style={{ width: `${m.totalYES + m.totalNO > 0 ? (m.totalYES / (m.totalYES + m.totalNO)) * 100 : 50}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">NO</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-red-400">{m.noOdds.toFixed(2)}x</span>
+                          <span className="text-xs text-gray-500">{fmt(m.totalNO)}</span>
+                        </div>
                       </div>
                     </div>
-                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all"
-                        style={{ width: `${(m.totalYES / (m.totalYES + m.totalNO)) * 100}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-400">NO</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-red-400">{m.noOdds.toFixed(2)}x</span>
-                        <span className="text-xs text-gray-500">{fmt(m.totalNO)}</span>
-                      </div>
-                    </div>
-                  </div>
 
-                  {(m.userBetYes > 0 || m.userBetNo > 0) && (
-                    <div className="mt-4 pt-3 border-t border-white/5">
-                      <p className="text-xs text-gray-500 mb-1">Your bets:</p>
-                      <div className="flex gap-3">
-                        {m.userBetYes > 0 && <Badge variant="success" size="sm">YES: {m.userBetYes}</Badge>}
-                        {m.userBetNo > 0 && <Badge variant="danger" size="sm">NO: {m.userBetNo}</Badge>}
+                    {(m.userBetYes > 0 || m.userBetNo > 0) && (
+                      <div className="mt-4 pt-3 border-t border-white/5">
+                        <p className="text-xs text-gray-500 mb-1">Your bets:</p>
+                        <div className="flex gap-3">
+                          {m.userBetYes > 0 && <Badge variant="success" size="sm">YES: {m.userBetYes}</Badge>}
+                          {m.userBetNo > 0 && <Badge variant="danger" size="sm">NO: {m.userBetNo}</Badge>}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </Card>
-              </motion.div>
-            ))}
-          </div>
+                    )}
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </AnimatedSection>
 
         {/* Bet Modal */}
@@ -200,8 +346,23 @@ export default function PredictionPage() {
                 </div>
               </div>
 
-              <Button fullWidth size="lg" onClick={placeBet} disabled={!betAmount}>
-                Place Bet
+              {error && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400 mb-4">{error}</div>
+              )}
+              {txHash && (
+                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-sm text-green-400 mb-4">
+                  Bet placed! Tx: {txHash.slice(0, 16)}...
+                </div>
+              )}
+
+              <Button
+                fullWidth
+                size="lg"
+                onClick={placeBet}
+                loading={isBetting}
+                disabled={!betAmount || !isConnected || parseFloat(betAmount) <= 0}
+              >
+                {!isConnected ? 'Connect Wallet' : 'Place Bet'}
               </Button>
             </div>
           )}
@@ -221,9 +382,26 @@ export default function PredictionPage() {
             </div>
             <Input type="date" label="Resolution Date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
             <Input type="number" label="Initial Liquidity (USDTZ)" placeholder="10000" value={newLiq} onChange={(e) => setNewLiq(e.target.value)} />
+
+            {error && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">{error}</div>
+            )}
+            {txHash && (
+              <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-sm text-green-400">
+                Market created! Tx: {txHash.slice(0, 16)}...
+              </div>
+            )}
+
             <div className="flex gap-3 mt-5">
               <Button variant="secondary" className="flex-1" onClick={() => setShowCreate(false)}>Cancel</Button>
-              <Button className="flex-1" onClick={createMarket} disabled={!newQ || !newDate || !newLiq}>Create</Button>
+              <Button
+                className="flex-1"
+                onClick={createMarket}
+                loading={isCreating}
+                disabled={!newQ || !newDate || !newLiq || !isConnected}
+              >
+                {!isConnected ? 'Connect Wallet' : 'Create'}
+              </Button>
             </div>
           </div>
         </Modal>

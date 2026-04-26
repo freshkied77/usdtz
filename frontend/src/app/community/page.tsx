@@ -14,19 +14,7 @@ import AnimatedSection from '@/components/ui/AnimatedSection'
 import Input from '@/components/ui/Input'
 import { useAccount } from 'wagmi'
 
-// ── Leaderboard Mock Data ──
-const TRADERS = [
-  { rank: 1, address: '0x7a3...f92d', volume: '$2,847,320', trades: 1284, pnl: '+$34,200', badge: 'whale' },
-  { rank: 2, address: '0xb8e...c41a', volume: '$1,923,100', trades: 892, pnl: '+$21,560', badge: 'whale' },
-  { rank: 3, address: '0x4f1...d7e8', volume: '$1,456,890', trades: 743, pnl: '+$18,340', badge: 'shark' },
-  { rank: 4, address: '0xc92...a3b1', volume: '$987,450', trades: 567, pnl: '+$12,100', badge: 'shark' },
-  { rank: 5, address: '0xe21...8f4c', volume: '$834,200', trades: 421, pnl: '+$9,870', badge: 'dolphin' },
-  { rank: 6, address: '0x1d5...6a9e', volume: '$723,100', trades: 389, pnl: '+$8,450', badge: 'dolphin' },
-  { rank: 7, address: '0x9b4...2c71', volume: '$612,890', trades: 312, pnl: '+$7,230', badge: 'dolphin' },
-  { rank: 8, address: '0x3e8...f123', volume: '$498,670', trades: 278, pnl: '+$5,890', badge: 'fish' },
-  { rank: 9, address: '0xa67...d894', volume: '$387,450', trades: 234, pnl: '+$4,560', badge: 'fish' },
-  { rank: 10, address: '0x8c2...b567', volume: '$276,320', trades: 189, pnl: '+$3,210', badge: 'fish' },
-]
+const TRADERS: { rank: number; address: string; volume: string; trades: number; pnl: string; badge: string }[] = []
 
 const REFERRAL_TIERS = [
   { name: 'Bronze', requirement: '0-5 referrals', commission: '2.5%', bonus: '—', color: 'text-orange-400' },
@@ -129,10 +117,10 @@ export default function CommunityPage() {
         {/* Stats Overview */}
         <AnimatedSection className="mb-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard label="Total Participants" value="1,234" change="+56" icon={<Users className="w-5 h-5" />} />
-            <StatCard label="Prize Pool" value="85,000 USDTZ" icon={<Gift className="w-5 h-5" />} />
-            <StatCard label="Your Rank" value={address ? '#127' : '—'} icon={<Medal className="w-5 h-5" />} />
-            <StatCard label="Your Referrals" value={address ? '3' : '—'} change="+1" icon={<Star className="w-5 h-5" />} />
+            <StatCard label="Total Participants" value="—" icon={<Users className="w-5 h-5" />} />
+            <StatCard label="Prize Pool" value="—" icon={<Gift className="w-5 h-5" />} />
+            <StatCard label="Your Rank" value={address ? '—' : '—'} icon={<Medal className="w-5 h-5" />} />
+            <StatCard label="Your Referrals" value={address ? '—' : '—'} icon={<Star className="w-5 h-5" />} />
           </div>
         </AnimatedSection>
 
@@ -173,7 +161,16 @@ export default function CommunityPage() {
             </AnimatedSection>
 
             {/* Top 3 Podium */}
-            <AnimatedSection>
+            {TRADERS.length === 0 && (
+              <AnimatedSection>
+                <Card className="text-center py-12">
+                  <Trophy className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold mb-2">Leaderboard Coming Soon</h3>
+                  <p className="text-gray-400">Start trading to appear on the leaderboard. Rankings are updated in real-time from on-chain data.</p>
+                </Card>
+              </AnimatedSection>
+            )}
+            {TRADERS.length > 0 && <AnimatedSection>
               <div className="grid grid-cols-3 gap-4 mb-8">
                 {TRADERS.slice(0, 3).map((trader, i) => (
                   <motion.div
@@ -199,10 +196,10 @@ export default function CommunityPage() {
                   </motion.div>
                 ))}
               </div>
-            </AnimatedSection>
+            </AnimatedSection>}
 
             {/* Full Table */}
-            <AnimatedSection delay={0.1}>
+            {TRADERS.length > 0 && <AnimatedSection delay={0.1}>
               <Card>
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -242,7 +239,7 @@ export default function CommunityPage() {
                   </table>
                 </div>
               </Card>
-            </AnimatedSection>
+            </AnimatedSection>}
           </div>
         )}
 
@@ -326,10 +323,10 @@ export default function CommunityPage() {
             {/* Your Referral Stats */}
             <AnimatedSection delay={0.1}>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard label="Total Referrals" value={address ? '3' : '—'} icon={<Users className="w-5 h-5" />} />
-                <StatCard label="Active Referrals" value={address ? '2' : '—'} icon={<Zap className="w-5 h-5" />} />
-                <StatCard label="Total Earned" value={address ? '127 USDTZ' : '—'} icon={<Gift className="w-5 h-5" />} />
-                <StatCard label="Current Tier" value={address ? 'Bronze' : '—'} icon={<Medal className="w-5 h-5" />} />
+                <StatCard label="Total Referrals" value={address ? '—' : '—'} icon={<Users className="w-5 h-5" />} />
+                <StatCard label="Active Referrals" value={address ? '—' : '—'} icon={<Zap className="w-5 h-5" />} />
+                <StatCard label="Total Earned" value={address ? '—' : '—'} icon={<Gift className="w-5 h-5" />} />
+                <StatCard label="Current Tier" value={address ? '—' : '—'} icon={<Medal className="w-5 h-5" />} />
               </div>
             </AnimatedSection>
 

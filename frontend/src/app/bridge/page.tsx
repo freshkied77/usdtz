@@ -10,13 +10,14 @@ import Badge from '@/components/ui/Badge'
 import AnimatedSection from '@/components/ui/AnimatedSection'
 import { TokenIcon } from '@/components/ui/TokenIcon'
 import { cn } from '@/lib/utils'
-import { useContractRead } from 'wagmi'
+import { useContractRead, useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { ABIS } from '@/lib/abis'
-import { formatEther } from 'viem'
+import { USDTZ_CONFIG } from '@/lib/config'
+import { formatEther, parseEther } from 'viem'
 
-const CROSS_CHAIN_BRIDGE_ADDRESS = '0x54C68aB92134167A42d8fF5e46bB1a566fF89BAb'
-const LIQUIDITY_VAULT_ADDRESS = '0xdfbe58825699E42D786EBf9B7Ba8F6ab03C1C759'
-const USDTZ_ADDRESS = '0xF682dfB3A4742071c280E7A77f4aE6d4E8F86665'
+const CROSS_CHAIN_BRIDGE_ADDRESS = USDTZ_CONFIG.contracts.crossChainBridge as `0x${string}`
+const LIQUIDITY_VAULT_ADDRESS = USDTZ_CONFIG.contracts.liquidityVault as `0x${string}`
+const USDTZ_ADDRESS = USDTZ_CONFIG.contracts.usdtz as `0x${string}`
 
 const CHAINS = [
   { id: 'bsc', name: 'BNB Chain', icon: 'BNB', color: 'from-yellow-400 to-orange-500', status: 'active', chainId: 56 },
@@ -25,14 +26,13 @@ const CHAINS = [
   { id: 'polygon', name: 'Polygon', icon: 'MATIC', color: 'from-purple-400 to-purple-600', status: 'coming', chainId: 137 },
 ]
 
-// Fallback static pairs for display (real APR/TVL would come from farm contracts)
-const ZEDXION_PAIRS = [
-  { from: 'USDTZ', to: 'USDT', apr: '8.5%', tvl: '$12.5M', type: 'one-sided' },
-  { from: 'USDTZ', to: 'BNB', apr: '12.3%', tvl: '$8.2M', type: 'one-sided' },
-  { from: 'USDTZ', to: 'ETH', apr: '10.2%', tvl: '$6.8M', type: 'one-sided' },
-  { from: 'USDTZ', to: 'ZEDX', apr: '15.7%', tvl: '$4.1M', type: 'one-sided' },
-  { from: 'ZEDX', to: 'USDT', apr: '9.1%', tvl: '$3.9M', type: 'one-sided' },
-  { from: 'ZEDX', to: 'BNB', apr: '11.4%', tvl: '$2.7M', type: 'one-sided' },
+const BRIDGE_PAIRS = [
+  { from: 'USDTZ', to: 'USDT', type: 'one-sided' },
+  { from: 'USDTZ', to: 'BNB', type: 'one-sided' },
+  { from: 'USDTZ', to: 'ETH', type: 'one-sided' },
+  { from: 'USDTZ', to: 'ZEDX', type: 'one-sided' },
+  { from: 'ZEDX', to: 'USDT', type: 'one-sided' },
+  { from: 'ZEDX', to: 'BNB', type: 'one-sided' },
 ]
 
 interface ChainConfig {
@@ -67,9 +67,26 @@ function Skeleton({ className }: { className?: string }) {
   return <div className={cn('animate-pulse bg-white/10 rounded', className)} />
 }
 
+const BRIDGE_ABI = [
+  {
+    inputs: [
+      { name: 'destChainId', type: 'uint256' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'recipient', type: 'address' },
+    ],
+    name: 'bridgeTokens',
+    outputs: [],
+    stateMutability: 'payable',
+    type: 'function',
+  },
+] as const
+
 export default function BridgePage() {
+  const { address, isConnected } = useAccount()
+  const publicClient = usePublicClient()
+  const { data: walletClient } = useWalletClient()
   const [selectedChain, setSelectedChain] = useState('zedxion')
-  const [selectedPair, setSelectedPair] = useState<typeof ZEDXION_PAIRS[0] | null>(null)
+  const [selectedPair, setSelectedPair] = useState<typeof BRIDGE_PAIRS[0] | null>(null)
   const [amount, setAmount] = useState('')
   const [isBridging, setIsBridging] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
@@ -124,16 +141,34 @@ export default function BridgePage() {
     return bsc + zedxion
   }, [bscChainConfig, zedxionChainConfig])
 
-  const handleBridge = async () => {
-    if (!selectedPair || !amount) return
-    setIsBridging(true)
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    setTxHash('0x' + Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2))
-    setIsBridging(false)
-  }
-
   const selectedChainConfig = selectedChain === 'bsc' ? bscChainConfig : selectedChain === 'zedxion' ? zedxionChainConfig : undefined
   const selectedChainLiquidity = selectedChain === 'bsc' ? bscLiquidity : selectedChain === 'zedxion' ? zedxionLiquidity : undefined
+
+  const handleBridge = async () => {
+    if (!selectedPair || !amount || !address || !publicClient || !walletClient || !isConnected || !selectedChainConfig) return
+    setIsBridging(true)
+    setTxHash(null)
+    try {
+      const destChainId = selectedChain === 'zedxion' ? BigInt(9000) : BigInt(56)
+      const bridgeAmount = parseEther(amount)
+      const gasFee = selectedChainConfig.gasFee || BigInt(0)
+
+      const { request } = await publicClient.simulateContract({
+        address: CROSS_CHAIN_BRIDGE_ADDRESS,
+        abi: BRIDGE_ABI,
+        functionName: 'bridgeTokens',
+        args: [destChainId, bridgeAmount, address],
+        value: gasFee,
+        account: address,
+      })
+      const hash = await walletClient.writeContract(request)
+      setTxHash(hash)
+    } catch (error) {
+      console.error('Bridge failed:', error)
+    } finally {
+      setIsBridging(false)
+    }
+  }
 
   return (
     <Layout>
@@ -294,7 +329,7 @@ export default function BridgePage() {
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
-                {ZEDXION_PAIRS.map((pair, i) => (
+                {BRIDGE_PAIRS.map((pair, i) => (
                   <motion.div
                     key={i}
                     initial={{ opacity: 0, y: 20 }}
@@ -316,15 +351,8 @@ export default function BridgePage() {
                       <span className="font-semibold">{pair.from}/{pair.to}</span>
                       <Badge variant="secondary" className="ml-auto text-xs">one-sided</Badge>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <p className="text-gray-400 text-xs">APR</p>
-                        <p className="font-bold text-green-400">{pair.apr}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400 text-xs">TVL</p>
-                        <p className="font-bold">{pair.tvl}</p>
-                      </div>
+                    <div className="text-sm">
+                      <Badge variant="primary" className="text-xs">{pair.type}</Badge>
                     </div>
                   </motion.div>
                 ))}
@@ -344,7 +372,7 @@ export default function BridgePage() {
                       <div className="bg-white/5 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm text-gray-400">Amount</span>
-                          <span className="text-sm text-gray-400">Balance: 10,000 {selectedPair.from}</span>
+                          <span className="text-sm text-gray-400">{selectedPair.from}</span>
                         </div>
                         <div className="flex items-center gap-4">
                           <input
@@ -424,7 +452,7 @@ export default function BridgePage() {
 
                       <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
                         <Coins className="w-4 h-4" />
-                        <span>Earn {selectedPair.apr} by adding to one-sided pool after bridge</span>
+                        <span>Add to one-sided pool after bridge to earn yield</span>
                       </div>
                     </div>
                   </motion.div>

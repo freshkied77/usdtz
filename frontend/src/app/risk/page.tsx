@@ -25,64 +25,9 @@ interface RiskProfile {
   }[]
 }
 
-const MOCK_RISK_PROFILES: Record<string, RiskProfile> = {
-  '0x1234...5678': {
-    overallScore: 32,
-    level: 'low',
-    healthFactor: 185,
-    liquidationRisk: 0.08,
-    volatilityExposure: 0.15,
-    concentrationRisk: 0.25,
-    recommendations: [
-      'Your positions are well collateralized',
-      'Consider diversifying into yield farms for better returns',
-      'Enable AI monitoring for automated risk alerts'
-    ],
-    aiInsights: [
-      { title: 'Healthy Position', description: 'Health factor above 150% provides good safety buffer', impact: 'positive' },
-      { title: 'Low Volatility Exposure', description: 'Portfolio well balanced against market swings', impact: 'positive' },
-      { title: 'Diversification Opportunity', description: 'Adding stablecoin positions could improve stability', impact: 'neutral' }
-    ]
-  },
-  '0xabcd...efgh': {
-    overallScore: 78,
-    level: 'critical',
-    healthFactor: 118,
-    liquidationRisk: 0.45,
-    volatilityExposure: 0.62,
-    concentrationRisk: 0.72,
-    recommendations: [
-      'URGENT: Add collateral immediately to raise health factor above 150%',
-      'Reduce exposure to high-volatility assets',
-      'Consider closing leveraged positions to reduce risk'
-    ],
-    aiInsights: [
-      { title: 'Critical Risk', description: 'Health factor below liquidation threshold', impact: 'negative' },
-      { title: 'High Concentration', description: 'Portfolio too concentrated in single asset', impact: 'negative' },
-      { title: 'Volatility Exposure', description: 'Significant exposure to BNB price swings', impact: 'negative' }
-    ]
-  },
-  '0x9876...4321': {
-    overallScore: 55,
-    level: 'medium',
-    healthFactor: 162,
-    liquidationRisk: 0.22,
-    volatilityExposure: 0.38,
-    concentrationRisk: 0.45,
-    recommendations: [
-      'Monitor health factor closely as market conditions change',
-      'Consider rebalancing portfolio to reduce concentration',
-      'Set up automated collateral addition for risk management'
-    ],
-    aiInsights: [
-      { title: 'Moderate Risk', description: 'Health factor acceptable but monitor closely', impact: 'neutral' },
-      { title: 'Growing Exposure', description: 'Recent activity has increased exposure', impact: 'negative' },
-      { title: 'Yield Opportunity', description: 'Some positions could be optimized for better returns', impact: 'neutral' }
-    ]
-  }
-}
+const MOCK_RISK_PROFILES: Record<string, RiskProfile> = {}
 
-const DEMO_ADDRESSES = Object.keys(MOCK_RISK_PROFILES)
+const DEMO_ADDRESSES: string[] = []
 
 function RiskMeter({ value, max = 100, label, color }: { value: number; max?: number; label: string; color: string }) {
   const percentage = Math.min((value / max) * 100, 100)
@@ -192,7 +137,7 @@ export default function RiskPage() {
     critical: { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400', badge: 'bg-red-500/20' }
   }
 
-  const style = levelColors[profile.level]
+  const style = profile ? levelColors[profile.level] : levelColors.low
 
   return (
     <Layout>
@@ -225,132 +170,150 @@ export default function RiskPage() {
         </AnimatedSection>
 
         {/* Main Risk Display */}
-        <div className="grid lg:grid-cols-3 gap-6 mb-8">
-          {/* Risk Score Card */}
-          <AnimatedSection delay={0.1}>
-            <Card variant="highlight" padding="lg" className={cn('text-center', style.bg, style.border)}>
-              <Badge variant={profile.level === 'low' ? 'primary' : profile.level === 'critical' ? 'danger' : 'secondary'} className="mb-4">
-                {profile.level.toUpperCase()} RISK
-              </Badge>
-              <RiskGauge score={profile.overallScore} />
-              <p className="text-5xl font-bold mt-4">{profile.overallScore}</p>
-              <p className="text-sm text-gray-400">Risk Score</p>
-              <div className="mt-4 pt-4 border-t border-white/10">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-gray-500">Health Factor</p>
-                    <p className="text-lg font-bold text-green-400">{profile.healthFactor}%</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Liq. Risk</p>
-                    <p className={cn('text-lg font-bold', profile.liquidationRisk > 0.3 ? 'text-red-400' : 'text-yellow-400')}>
-                      {(profile.liquidationRisk * 100).toFixed(0)}%
-                    </p>
-                  </div>
-                </div>
-              </div>
+        {!profile ? (
+          <AnimatedSection>
+            <Card variant="highlight" padding="lg" className="text-center py-16">
+              <Shield className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold mb-2">Connect Your Wallet</h2>
+              <p className="text-gray-400 mb-6">Connect your wallet to view your personalized AI risk analysis</p>
+              <Button>
+                <Shield className="w-4 h-4" />
+                Connect Wallet
+              </Button>
             </Card>
           </AnimatedSection>
-
-          {/* Risk Breakdown */}
-          <AnimatedSection delay={0.2} className="lg:col-span-2">
-            <Card variant="highlight" padding="lg">
-              <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <Activity className="w-5 h-5 text-primary-400" />
-                Risk Breakdown
-              </h2>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <RiskMeter value={profile.liquidationRisk * 100} label="Liquidation Risk" color="text-red-400" />
-                  <RiskMeter value={profile.volatilityExposure * 100} label="Volatility Exposure" color="text-yellow-400" />
+        ) : (
+          <div className="grid lg:grid-cols-3 gap-6 mb-8">
+            {/* Risk Score Card */}
+            <AnimatedSection delay={0.1}>
+              <Card variant="highlight" padding="lg" className={cn('text-center', style.bg, style.border)}>
+                <Badge variant={profile.level === 'low' ? 'primary' : profile.level === 'critical' ? 'danger' : 'secondary'} className="mb-4">
+                  {profile.level.toUpperCase()} RISK
+                </Badge>
+                <RiskGauge score={profile.overallScore} />
+                <p className="text-5xl font-bold mt-4">{profile.overallScore}</p>
+                <p className="text-sm text-gray-400">Risk Score</p>
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500">Health Factor</p>
+                      <p className="text-lg font-bold text-green-400">{profile.healthFactor}%</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Liq. Risk</p>
+                      <p className={cn('text-lg font-bold', profile.liquidationRisk > 0.3 ? 'text-red-400' : 'text-yellow-400')}>
+                        {(profile.liquidationRisk * 100).toFixed(0)}%
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-4">
-                  <RiskMeter value={profile.concentrationRisk * 100} label="Concentration Risk" color="text-orange-400" />
-                  <RiskMeter value={100 - profile.healthFactor} label="Health Buffer Used" color={profile.healthFactor > 150 ? 'text-green-400' : 'text-red-400'} />
-                </div>
-              </div>
+              </Card>
+            </AnimatedSection>
 
-              {/* AI Insights */}
-              <div className="mt-6 pt-6 border-t border-white/10">
-                <h3 className="text-sm font-semibold text-gray-400 mb-4">AI Insights</h3>
-                <div className="grid md:grid-cols-3 gap-4">
-                  {profile.aiInsights.map((insight, i) => (
-                    <InsightCard key={i} insight={insight} />
+            {/* Risk Breakdown */}
+            <AnimatedSection delay={0.2} className="lg:col-span-2">
+              <Card variant="highlight" padding="lg">
+                <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-primary-400" />
+                  Risk Breakdown
+                </h2>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <RiskMeter value={profile.liquidationRisk * 100} label="Liquidation Risk" color="text-red-400" />
+                    <RiskMeter value={profile.volatilityExposure * 100} label="Volatility Exposure" color="text-yellow-400" />
+                  </div>
+                  <div className="space-y-4">
+                    <RiskMeter value={profile.concentrationRisk * 100} label="Concentration Risk" color="text-orange-400" />
+                    <RiskMeter value={100 - profile.healthFactor} label="Health Buffer Used" color={profile.healthFactor > 150 ? 'text-green-400' : 'text-red-400'} />
+                  </div>
+                </div>
+
+                {/* AI Insights */}
+                <div className="mt-6 pt-6 border-t border-white/10">
+                  <h3 className="text-sm font-semibold text-gray-400 mb-4">AI Insights</h3>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {profile.aiInsights.map((insight, i) => (
+                      <InsightCard key={i} insight={insight} />
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            </AnimatedSection>
+          </div>
+        )}
+
+        {profile && (
+          <>
+            {/* Recommendations */}
+            <AnimatedSection delay={0.3}>
+              <Card padding="lg">
+                <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-primary-400" />
+                  AI Recommendations
+                </h2>
+                <div className="space-y-4">
+                  {profile.recommendations.map((rec, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      className="flex items-start gap-4 p-4 bg-white/5 rounded-xl hover:bg-white/8 transition-colors"
+                    >
+                      <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', style.bg)}>
+                        {profile.level === 'critical' ? (
+                          <AlertTriangle className="w-4 h-4 text-red-400" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-primary-400" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium">{rec}</p>
+                        {profile.level === 'critical' && (
+                          <p className="text-xs text-red-400 mt-1">Action required immediately</p>
+                        )}
+                      </div>
+                    </motion.div>
                   ))}
                 </div>
-              </div>
-            </Card>
-          </AnimatedSection>
-        </div>
 
-        {/* Recommendations */}
-        <AnimatedSection delay={0.3}>
-          <Card padding="lg">
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-primary-400" />
-              AI Recommendations
-            </h2>
-            <div className="space-y-4">
-              {profile.recommendations.map((rec, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="flex items-start gap-4 p-4 bg-white/5 rounded-xl hover:bg-white/8 transition-colors"
-                >
-                  <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', style.bg)}>
-                    {profile.level === 'critical' ? (
-                      <AlertTriangle className="w-4 h-4 text-red-400" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-primary-400" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium">{rec}</p>
-                    {profile.level === 'critical' && (
-                      <p className="text-xs text-red-400 mt-1">Action required immediately</p>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+                <div className="mt-6 pt-6 border-t border-white/10 flex flex-wrap gap-3">
+                  <Button variant="primary" size="md">
+                    <Lock className="w-4 h-4" />
+                    Enable Auto-Protection
+                  </Button>
+                  <Button variant="secondary" size="md">
+                    <Eye className="w-4 h-4" />
+                    Set Alert Thresholds
+                  </Button>
+                  <Button variant="outline" size="md">
+                    <TrendingUp className="w-4 h-4" />
+                    Optimize Portfolio
+                  </Button>
+                </div>
+              </Card>
+            </AnimatedSection>
 
-            <div className="mt-6 pt-6 border-t border-white/10 flex flex-wrap gap-3">
-              <Button variant="primary" size="md">
-                <Lock className="w-4 h-4" />
-                Enable Auto-Protection
-              </Button>
-              <Button variant="secondary" size="md">
-                <Eye className="w-4 h-4" />
-                Set Alert Thresholds
-              </Button>
-              <Button variant="outline" size="md">
-                <TrendingUp className="w-4 h-4" />
-                Optimize Portfolio
-              </Button>
-            </div>
-          </Card>
-        </AnimatedSection>
-
-        {/* Ad Hook - Show risk score to attract users */}
-        <AnimatedSection delay={0.4} className="mt-8">
-          <Card variant="highlight" padding="lg" className="text-center bg-gradient-to-r from-primary-500/10 to-secondary-500/10">
-            <h2 className="text-2xl font-bold mb-2">Protect Your Portfolio with AI</h2>
-            <p className="text-gray-400 mb-6 max-w-lg mx-auto">
-              Get real-time risk analysis, liquidation predictions, and automated protection for your DeFi positions.
-            </p>
-            <div className="flex items-center justify-center gap-4 flex-wrap">
-              <Button size="lg">
-                Connect Wallet for Free Analysis
-              </Button>
-              <Button variant="secondary" size="lg">
-                View Demo Portfolio
-              </Button>
-            </div>
-            <p className="text-xs text-gray-500 mt-4">Used by 45,000+ DeFi users to protect $98M+ in assets</p>
-          </Card>
-        </AnimatedSection>
+            {/* Ad Hook - Show risk score to attract users */}
+            <AnimatedSection delay={0.4} className="mt-8">
+              <Card variant="highlight" padding="lg" className="text-center bg-gradient-to-r from-primary-500/10 to-secondary-500/10">
+                <h2 className="text-2xl font-bold mb-2">Protect Your Portfolio with AI</h2>
+                <p className="text-gray-400 mb-6 max-w-lg mx-auto">
+                  Get real-time risk analysis, liquidation predictions, and automated protection for your DeFi positions.
+                </p>
+                <div className="flex items-center justify-center gap-4 flex-wrap">
+                  <Button size="lg">
+                    Connect Wallet for Free Analysis
+                  </Button>
+                  <Button variant="secondary" size="lg">
+                    View Demo Portfolio
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500 mt-4">Analyze your DeFi portfolio risk exposure on BNB Chain</p>
+              </Card>
+            </AnimatedSection>
+          </>
+        )}
       </div>
     </Layout>
   )

@@ -1,13 +1,13 @@
 {
-  "name": "USDTZ Token List",
-  "logoURI": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MDAgNTAwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcD0iIzFhMWEyZSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcD0iIzE2MjEzZSIvPjwvbGluZWFyR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJ0b2tlbkdyYWQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3A9IiNmZmQ3MDAiLz48c3RvcCBvZmZzZXQ9IjUwJSIgc3RvcD0iI2ZmYjM0NyIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcD0iI2ZmOGMwMCIvPjwvbGluZWFyR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJzaGllbGRHcmFkIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjAlJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3A9IiM0ZmFjZmUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3A9IiMwMGYyZmUiLz48L2xpbmVhckdyYWRpZW50PjxmaWx0ZXIgaWQ9Imdsb3ciPjxlRmNiIGd4bk9mZnNldD0iMyIgcmVzdWx0PSJjb2xvcmVkQmx1ciIvPjxlTWVyZ2U+PGZlTWVyZ2VOb2RlIGluPSJjb2xvcmVkQmx1ciIvPjxlTWVyZ2VOb2RlIGluPSJTb3VyY2VHcmFwaGljIi8+PC9lTWVyZ2U+PC9maWx0ZXI+PC9kZWZzPj48cmVjdCB3aWR0aD0iNTAwIiBoZWlnaHQ9IjUwMCIgcng9IjYwIiBmaWxsPSJ1cmwoI2JnR3JhZCIvPjxwYXRoIGQ9Ik0yNTAgODAgTDM3MCAxNDAgTDM3MCAyODAgTDI1MCAzODAgTDEzMCAyODAgTDEzMCAxNDAgWiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI3NoaWVsZEdyYWQpIiBzdHJva2Utd2lkdGg9IjQiIG9wYWNpdHk9IjAuMyIvPjxlbGxpcHNlIGN4PSIyNTAiIGN5PSIyMDAiIHI9IjcwIiBmaWxsPSJub25lIiBzdHJva2U9InVybCgjdG9rZW5HcmFkKSIgc3Ryb2tlLXdpZHRoPSI2IiBmaWx0ZXI9InVybCgjZ2xvdykiLz48dGV4dCB4PSIyNTAiIHk9IjE4NSIgZm9udC1mYW1pbHk9IkFyaWFsIEJsYWNrLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjI4IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iI2ZmZmZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+VVNURDwvdGV4dD48dGV4dCB4PSIyNTAiIHk9IjIxNSIgZm9udC1mYW1pbHk9IkFyaWFsIEJsYWNrLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjIyIiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0idXJsKCN0b2tlbkdyYWQpIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj4uejwvdGV4dD48L3N2Zz4=",
-  "timestamp": "2026-04-22T00:00:00+00:00",
+  "name": "USDTZ Token List - Live from CoinGecko",
+  "logoURI": "https://assets.coingecko.com/coins/images/tether/thumb.png",
+  "timestamp": "2026-04-23T00:00:00+00:00",
   "version": {
-    "major": 2,
+    "major": 3,
     "minor": 0,
     "patch": 0
   },
-  "keywords": ["usdtz", "stablecoin", "defi", "privacy", "zedxion", "bnb-chain"],
+  "keywords": ["usdtz", "stablecoin", "defi", "bnb-chain", "coingecko"],
   "tokens": [
     {
       "chainId": 56,
@@ -15,11 +15,11 @@
       "name": "USDTZ Stablecoin",
       "symbol": "USDTZ",
       "decimals": 18,
-      "logoURI": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MDAgNTAwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3A9IiMxYTFhMmUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3A9IiMxNjIxM2UiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0idG9rZW5HcmFkIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wPSIjZmZkNzAwIi8+PHN0b3Agb2Zmc2V0PSI1MCUiIHN0b3A9IiNmZmIzNDciLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3A9IiNmZjhjMDAiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0ic2hpZWxkR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3A9IiM0ZmFjZmUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3A9IiMwMGYyZmUiLz48L2xpbmVhckdyYWRpZW50PjxmaWx0ZXIgaWQ9Imdsb3ciPjxlRmNiIGd4bk9mZnNldD0iMyIgcmVzdWx0PSJjb2xvcmVkQmx1ciIvPjxlTWVyZ2U+PGZlTWVyZ2VOb2RlIGluPSJjb2xvcmVkQmx1ciIvPjxlTWVyZ2VOb2RlIGluPSJTb3VyY2VHcmFwaGljIi8+PC9lTWVyZ2U+PC9maWx0ZXI+PC9kZWZzPj48cmVjdCB3aWR0aD0iNTAwIiBoZWlnaHQ9IjUwMCIgcng9IjYwIiBmaWxsPSJ1cmwoI2JnR3JhZCIvPjxwYXRoIGQ9Ik0yNTAgODAgTDM3MCAxNDAgTDM3MCAyODAgTDI1MCAzODAgTDEzMCAyODAgTDEzMCAxNDAgWiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI3NoaWVsZEdyYWQpIiBzdHJva2Utd2lkdGg9IjQiIG9wYWNpdHk9IjAuMyIvPjxlbGxpcHNlIGN4PSIyNTAiIGN5PSIyMDAiIHI9IjcwIiBmaWxsPSJub25lIiBzdHJva2U9InVybCgjdG9rZW5HcmFkKSIgc3Ryb2tlLXdpZHRoPSI2IiBmaWx0ZXI9InVybCgjZ2xvdykiLz48dGV4dCB4PSIyNTAiIHk9IjE4NSIgZm9udC1mYW1pbHk9IkFyaWFsIEJsYWNrLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjI4IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iI2ZmZmZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+VVNURDwvdGV4dD48dGV4dCB4PSIyNTAiIHk9IjIxNSIgZm9udC1mYW1pbHk9IkFyaWFsIEJsYWNrLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjIyIiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0idXJsKCN0b2tlbkdyYWQpIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj4uejwvdGV4dD48L3N2Zz4=",
-      "tags": ["stablecoin", "defi", "algorithmic"],
+      "logoURI": "/token-usdtz.svg",
+      "tags": ["stablecoin", "defi"],
       "extensions": {
         "website": "https://usdt.z",
-        "description": "Next-generation algorithmic stablecoin with ZK privacy and AI-powered risk management"
+        "description": "Next-generation algorithmic stablecoin"
       }
     },
     {
@@ -28,30 +28,175 @@
       "name": "Zedxion",
       "symbol": "ZEDX",
       "decimals": 18,
-      "logoURI": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MDAgNTAwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcD0iIzFhMWEyZSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcD0iIzE2MjEzZSIvPjwvbGluZWFyR3JhZGllbnQ+PGxpbmVhckdyYWRpZW50IGlkPSJ6ZWR4R3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3A9IiMwMGYyZmUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3A9IiMzNmM5ZmYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iNTAwIiBoZWlnaHQ9IjUwMCIgcng9IjYwIiBmaWxsPSJ1cmwoI2JnR3JhZCIvPjxlbGxpcHNlIGN4PSIyNTAiIGN5PSIyNTAiIHI9IjE1MCIgZmlsbD0idXJsKCN6ZWR4R3JhZCkiIG9wYWNpdHk9IjAuMiIvPjxlbGxpcHNlIGN4PSIyNTAiIGN5PSIyNTAiIHI9IjEwMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI3plZHhHcmFkKSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHRleHQgeD0iMjUwIiB5PSIyMzUiIGZvbnQtZmFtaWx5PSJBcmlhbCBCbGFjaywgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIzMiIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlpFRFg8L3RleHQ+PHNlY3Rpb24geD0iMjUwIiB5PSIyNzAiIHdpZHRoPSIxMjAiIGhlaWdodD0iNCIgcng9IjIiIGZpbGw9InVybCgjemVkdkdyYWQpIi8+PC9zdmc+",
-      "tags": ["chain", "governance"]
+      "logoURI": "/token-zedx.svg",
+      "tags": ["native", "governance"]
+    },
+    {
+      "chainId": 56,
+      "address": "0x55d398326f99059fF775485246999027B3197955",
+      "name": "Tether USD",
+      "symbol": "USDT",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/325/small/Tether.png",
+      "tags": ["stablecoin"]
+    },
+    {
+      "chainId": 56,
+      "address": "0x8AC76a51cc950d9822D68d83eE1E1b8D43eC3b10",
+      "name": "USD Coin",
+      "symbol": "USDC",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png",
+      "tags": ["stablecoin"]
+    },
+    {
+      "chainId": 56,
+      "address": "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56",
+      "name": "Binance USD",
+      "symbol": "BUSD",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/9576/small/BUSD.png",
+      "tags": ["stablecoin"]
+    },
+    {
+      "chainId": 56,
+      "address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+      "name": "Wrapped BNB",
+      "symbol": "WBNB",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png",
+      "tags": ["wrapped", "defi"]
+    },
+    {
+      "chainId": 56,
+      "address": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
+      "name": "Ethereum",
+      "symbol": "ETH",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/279/small/ethereum.png",
+      "tags": ["wrapped"]
+    },
+    {
+      "chainId": 56,
+      "address": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+      "name": "Bitcoin BEP2",
+      "symbol": "BTCB",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/14108/small/Binance-bitcoin.png",
+      "tags": ["wrapped"]
+    },
+    {
+      "chainId": 56,
+      "address": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+      "name": "PancakeSwap",
+      "symbol": "CAKE",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo.png",
+      "tags": ["defi", "dex"]
+    },
+    {
+      "chainId": 56,
+      "address": "0xa184088a740c695e156f91f0753c44d103bf82e8",
+      "name": "Auto",
+      "symbol": "AUTO",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/13751/small/autofarm.png",
+      "tags": ["defi", "yield"]
+    },
+    {
+      "chainId": 56,
+      "address": "0x4B0F1812e5A2f2cd3EEB17fDBAb985b3e6a3D6E6",
+      "name": "Trust Wallet",
+      "symbol": "TWT",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/11085/small/Trust.png",
+      "tags": ["wallet"]
+    },
+    {
+      "chainId": 56,
+      "address": "0xcF6BB5389c92Bd7828a7fA165021B0c8E9A2bD1D",
+      "name": "Venus",
+      "symbol": "XVS",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/12677/small/venus.png",
+      "tags": ["defi", "lending"]
+    },
+    {
+      "chainId": 56,
+      "address": "0xfb6115445Bff7b52FeB98650C87fdc2E51c75D44",
+      "name": "Aave",
+      "symbol": "AAVE",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/12645/small/AAVE.png",
+      "tags": ["defi", "lending"]
+    },
+    {
+      "chainId": 56,
+      "address": "0xF8a0BF9cF54e92EB0ACD6bbAa2B32D6d3e81bC3F",
+      "name": "Chainlink",
+      "symbol": "LINK",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png",
+      "tags": ["oracle"]
+    },
+    {
+      "chainId": 56,
+      "address": "0xBf5140A22545168B77C2A7C1B43C6E2A3B9dAB8c",
+      "name": "Uniswap",
+      "symbol": "UNI",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/12504/small/uniswap-uni.png",
+      "tags": ["defi", "dex"]
+    },
+    {
+      "chainId": 56,
+      "address": "0x7083609fCE4d1d8Dc9701515325EC87e22c1F85",
+      "name": "Polkadot",
+      "symbol": "DOT",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/12171/small/polkadot.png",
+      "tags": ["layer1"]
+    },
+    {
+      "chainId": 56,
+      "address": "0x3EE2200Efb3400fAbB9AacF312AbcbD20bE677B1",
+      "name": "Cardano",
+      "symbol": "ADA",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/975/small/cardano.png",
+      "tags": ["layer1"]
+    },
+    {
+      "chainId": 56,
+      "address": "0x570A5D26f7765Ecb712C092108484aAE84A427B0",
+      "name": "Solana",
+      "symbol": "SOL",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/4128/small/solana.png",
+      "tags": ["layer1"]
+    },
+    {
+      "chainId": 56,
+      "address": "0xCC42724C6683B7E57334c4E856f4c9965ED706dD",
+      "name": "Polygon",
+      "symbol": "MATIC",
+      "decimals": 18,
+      "logoURI": "https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png",
+      "tags": ["layer2"]
     }
   ],
   "tags": {
-    "stablecoin": {
-      "name": "Stablecoin",
-      "description": "Tokens pegged to fiat currency"
-    },
-    "defi": {
-      "name": "DeFi",
-      "description": "Decentralized Finance protocols"
-    },
-    "algorithmic": {
-      "name": "Algorithmic",
-      "description": "Algorithmic stablecoin protocols"
-    },
-    "chain": {
-      "name": "Chain",
-      "description": "Native chain tokens"
-    },
-    "governance": {
-      "name": "Governance",
-      "description": "Governance tokens"
-    }
+    "stablecoin": { "name": "Stablecoin", "description": "Tokens pegged to fiat currency" },
+    "defi": { "name": "DeFi", "description": "Decentralized Finance protocols" },
+    "wrapped": { "name": "Wrapped", "description": "Wrapped tokens from other chains" },
+    "layer1": { "name": "Layer 1", "description": "Native layer 1 tokens" },
+    "layer2": { "name": "Layer 2", "description": "Layer 2 scaling tokens" },
+    "oracle": { "name": "Oracle", "description": "Oracle network tokens" },
+    "dex": { "name": "DEX", "description": "Decentralized exchange tokens" },
+    "lending": { "name": "Lending", "description": "Lending protocol tokens" },
+    "yield": { "name": "Yield", "description": "Yield farming tokens" },
+    "wallet": { "name": "Wallet", "description": "Wallet utility tokens" },
+    "native": { "name": "Native", "description": "Native chain tokens" },
+    "governance": { "name": "Governance", "description": "Governance tokens" }
   }
 }

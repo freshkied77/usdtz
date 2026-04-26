@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BarChart3, Link2, Droplets, Server, Zap, Shield, Activity } from 'lucide-react'
 import Layout from '@/components/Layout'
 import Card from '@/components/ui/Card'
@@ -11,17 +11,93 @@ import Badge from '@/components/ui/Badge'
 import ProgressBar from '@/components/ui/ProgressBar'
 import AnimatedSection from '@/components/ui/AnimatedSection'
 import { TokenIcon } from '@/components/ui/TokenIcon'
+import { useContractRead } from 'wagmi'
+import { ABIS } from '@/lib/abis'
+import { USDTZ_CONFIG } from '@/lib/config'
+import { formatEther } from 'viem'
+import { fetchTokenPrices } from '@/lib/api/coingecko'
 
-const COLLATERAL = [
-  { token: 'BNB', amount: '45,234 BNB', value: '$27,140,400', ratio: '21.7%' },
-  { token: 'BUSD', amount: '38,500,000 BUSD', value: '$38,500,000', ratio: '30.8%' },
-  { token: 'USDT', amount: '42,100,000 USDT', value: '$42,100,000', ratio: '33.7%' },
-  { token: 'BTCB', amount: '245 BTCB', value: '$15,925,000', ratio: '12.8%' },
-  { token: 'ETH', amount: '1,250 ETH', value: '$4,375,000', ratio: '3.5%' },
-]
+const POOL_MANAGER = USDTZ_CONFIG.contracts.poolManager as `0x${string}`
+
+interface CollateralItem {
+  token: string
+  amount: string
+  value: string
+  ratio: string
+}
 
 export default function StatsPage() {
   const [activeTab, setActiveTab] = useState('overview')
+  const [collateral, setCollateral] = useState<CollateralItem[]>([])
+  const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(true)
+
+  // Get total TVL from contract
+  const { data: tvlData } = useContractRead({
+    address: POOL_MANAGER,
+    abi: ABIS.PoolManager,
+    functionName: 'totalTVL',
+    watch: true,
+  })
+
+  // Get collateral ratio
+  const { data: collateralRatioData } = useContractRead({
+    address: POOL_MANAGER,
+    abi: ABIS.PoolManager,
+    functionName: 'getCollateralRatio',
+    watch: true,
+  })
+
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true)
+      try {
+        // Fetch token prices
+        const prices = await fetchTokenPrices(['binancecoin', 'ethereum', 'bitcoin', 'tether'])
+        setTokenPrices({
+          BNB: prices['binancecoin']?.usd || 0,
+          ETH: prices['ethereum']?.usd || 0,
+          BTC: prices['bitcoin']?.usd || 0,
+          USDT: prices['tether']?.usd || 1,
+        })
+
+        const tvl = tvlData ? Number(formatEther(tvlData)) : 0
+        const supportedCollateral = [
+          { token: 'BNB', coingeckoKey: 'binancecoin' },
+          { token: 'BUSD', coingeckoKey: 'tether' },
+          { token: 'USDT', coingeckoKey: 'tether' },
+          { token: 'BTCB', coingeckoKey: 'bitcoin' },
+          { token: 'ETH', coingeckoKey: 'ethereum' },
+        ]
+        const collateralBreakdown: CollateralItem[] = supportedCollateral.map(c => ({
+          token: c.token,
+          amount: `${c.token}`,
+          value: prices[c.coingeckoKey]?.usd ? `$${prices[c.coingeckoKey].usd.toFixed(2)}` : '...',
+          ratio: tvl > 0 ? 'On-chain' : '...',
+        }))
+        setCollateral(collateralBreakdown)
+      } catch (error) {
+        console.error('Failed to load stats:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+    const interval = setInterval(loadData, 30000)
+    return () => clearInterval(interval)
+  }, [tvlData])
+
+  const formatUSD = (value: number | bigint) => {
+    const num = typeof value === 'bigint' ? Number(formatEther(value)) : value
+    if (num >= 1e9) return `$${(num / 1e9).toFixed(2)}B`
+    if (num >= 1e6) return `$${(num / 1e6).toFixed(2)}M`
+    if (num >= 1e3) return `$${(num / 1e3).toFixed(2)}K`
+    return `$${num.toFixed(2)}`
+  }
+
+  const totalTVL = tvlData ? Number(formatEther(tvlData)) : 0
+  const collateralRatio = collateralRatioData ? Number(collateralRatioData) / 100 : 0
 
   return (
     <Layout>
@@ -49,10 +125,24 @@ export default function StatsPage() {
           <div className="space-y-6">
             <AnimatedSection>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard label="USDTZ Price" value="$1.00" change="+0.01%" icon={<Activity className="w-5 h-5" />} />
-                <StatCard label="Market Cap" value="$125M" icon={<BarChart3 className="w-5 h-5" />} />
-                <StatCard label="24h Volume" value="$8.45M" change="+12.3%" />
-                <StatCard label="Total Supply" value="125M USDTZ" />
+                <StatCard
+                  label="USDTZ Price"
+                  value="$1.00"
+                  icon={<Activity className="w-5 h-5" />}
+                />
+                <StatCard
+                  label="Total TVL"
+                  value={loading ? '...' : formatUSD(totalTVL)}
+                  icon={<BarChart3 className="w-5 h-5" />}
+                />
+                <StatCard
+                  label="Collateral Ratio"
+                  value={collateralRatio > 0 ? `${collateralRatio.toFixed(1)}%` : '...'}
+                />
+                <StatCard
+                  label="Chain"
+                  value="BSC (56)"
+                />
               </div>
             </AnimatedSection>
 
@@ -62,18 +152,20 @@ export default function StatsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="text-center p-5 bg-white/5 rounded-xl">
                     <p className="text-gray-400 text-sm mb-1">Total Collateral</p>
-                    <p className="text-3xl font-bold text-primary-400">$127.4M</p>
+                    <p className="text-3xl font-bold text-primary-400">
+                      {loading ? '...' : formatUSD(totalTVL)}
+                    </p>
                     <p className="text-green-400 text-sm mt-1">+2.5% today</p>
                   </div>
                   <div className="text-center p-5 bg-white/5 rounded-xl">
                     <p className="text-gray-400 text-sm mb-1">Collateral Ratio</p>
-                    <p className="text-3xl font-bold">156.2%</p>
+                    <p className="text-3xl font-bold">{collateralRatio.toFixed(1)}%</p>
                     <Badge variant="success" className="mt-2">Healthy</Badge>
                   </div>
                   <div className="text-center p-5 bg-white/5 rounded-xl">
-                    <p className="text-gray-400 text-sm mb-1">Active Users</p>
-                    <p className="text-3xl font-bold">45,234</p>
-                    <p className="text-green-400 text-sm mt-1">+234 today</p>
+                    <p className="text-gray-400 text-sm mb-1">Chain ID</p>
+                    <p className="text-3xl font-bold">56</p>
+                    <Badge variant="success" className="mt-2">BNB Chain</Badge>
                   </div>
                 </div>
               </Card>
@@ -119,36 +211,27 @@ export default function StatsPage() {
                   </div>
                   <div className="p-4 bg-white/5 rounded-xl">
                     <p className="text-gray-400 text-sm mb-1">Price Source</p>
-                    <p className="text-xl font-bold flex items-center gap-2"><Link2 className="w-5 h-5 text-blue-400" /> Chainlink</p>
+                    <p className="text-xl font-bold flex items-center gap-2">
+                      <Link2 className="w-5 h-5 text-blue-400" /> Chainlink
+                    </p>
                   </div>
                 </div>
-                <div className="p-4 bg-white/5 rounded-xl">
-                  <p className="text-gray-400 text-sm mb-1">Feed Address</p>
-                  <code className="text-sm text-primary-400">0x0567F2324251f7Bb9aF2aE3D0cF8881Fb6D7F247</code>
-                </div>
-              </Card>
-            </AnimatedSection>
-
-            <AnimatedSection delay={0.1}>
-              <Card>
-                <h2 className="text-xl font-bold mb-5">Feed Statistics</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center p-4 bg-white/5 rounded-xl">
-                    <p className="text-gray-400 text-sm mb-1">Last Update</p>
-                    <p className="text-lg font-bold">12 sec ago</p>
-                  </div>
-                  <div className="text-center p-4 bg-white/5 rounded-xl">
-                    <p className="text-gray-400 text-sm mb-1">Deviation</p>
-                    <p className="text-lg font-bold text-green-400">0.00%</p>
-                  </div>
-                  <div className="text-center p-4 bg-white/5 rounded-xl">
-                    <p className="text-gray-400 text-sm mb-1">Staleness</p>
-                    <Badge variant="success">Pass</Badge>
-                  </div>
-                  <div className="text-center p-4 bg-white/5 rounded-xl">
-                    <p className="text-gray-400 text-sm mb-1">Heartbeat</p>
-                    <p className="text-lg font-bold">1 hour</p>
-                  </div>
+                <div className="space-y-3">
+                  {[
+                    { name: 'BNB/USD', address: USDTZ_CONFIG.oracles.chainlink.bnbUsd, price: tokenPrices.BNB ? `$${tokenPrices.BNB.toFixed(2)}` : '...' },
+                    { name: 'USDT/USD', address: USDTZ_CONFIG.oracles.chainlink.usdtUsd, price: '$1.00' },
+                  ].map((feed, i) => (
+                    <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                      <div>
+                        <p className="font-semibold">{feed.name}</p>
+                        <p className="text-xs text-gray-500 font-mono">{feed.address.slice(0, 10)}...{feed.address.slice(-8)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold">{feed.price}</p>
+                        <Badge variant="success" size="sm">Live</Badge>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </Card>
             </AnimatedSection>
@@ -161,15 +244,24 @@ export default function StatsPage() {
               <Card>
                 <h2 className="text-xl font-bold mb-5">Collateral Breakdown</h2>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  {COLLATERAL.map((c, i) => (
-                    <div key={i} className="text-center p-4 bg-white/5 rounded-xl">
-                      <TokenIcon symbol={c.token} size="lg" className="mx-auto mb-3" />
-                      <h3 className="font-semibold mb-1">{c.token}</h3>
-                      <p className="text-lg font-bold mb-1">{c.value}</p>
-                      <p className="text-xs text-gray-400">{c.amount}</p>
-                      <Badge variant="primary" className="mt-2">{c.ratio}</Badge>
-                    </div>
-                  ))}
+                  {loading ? (
+                    [...Array(5)].map((_, i) => (
+                      <div key={i} className="p-4 bg-white/5 rounded-xl animate-pulse">
+                        <div className="h-4 w-12 bg-white/10 rounded mb-2" />
+                        <div className="h-8 w-20 bg-white/10 rounded" />
+                      </div>
+                    ))
+                  ) : (
+                    collateral.map((c) => (
+                      <div key={c.token} className="text-center p-4 bg-white/5 rounded-xl">
+                        <TokenIcon symbol={c.token} size="lg" className="mx-auto mb-2" />
+                        <p className="font-bold">{c.token}</p>
+                        <p className="text-sm text-gray-400">{c.amount}</p>
+                        <p className="text-primary-400 font-semibold">{c.value}</p>
+                        <Badge variant="primary" className="mt-2">{c.ratio}</Badge>
+                      </div>
+                    ))
+                  )}
                 </div>
               </Card>
             </AnimatedSection>
@@ -188,17 +280,17 @@ export default function StatsPage() {
                   </thead>
                   <tbody>
                     {[
-                      { pair: 'USDTZ-USDT', liq: '$15.2M', vol: '$4.5M', alloc: '8%' },
-                      { pair: 'USDTZ-BNB', liq: '$12.8M', vol: '$3.2M', alloc: '10%' },
-                      { pair: 'USDTZ-BUSD', liq: '$10.5M', vol: '$2.8M', alloc: '8%' },
-                      { pair: 'USDTZ-ETH', liq: '$8.9M', vol: '$1.9M', alloc: '6%' },
-                      { pair: 'USDTZ-BTCB', liq: '$7.2M', vol: '$1.2M', alloc: '6%' },
+                      { pair: 'USDTZ-USDT', token: 'USDT' },
+                      { pair: 'USDTZ-BNB', token: 'BNB' },
+                      { pair: 'USDTZ-BUSD', token: 'BUSD' },
+                      { pair: 'USDTZ-ETH', token: 'ETH' },
+                      { pair: 'USDTZ-BTCB', token: 'BTCB' },
                     ].map((r, i) => (
                       <tr key={i} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                         <td className="px-6 py-3 font-medium">{r.pair}</td>
-                        <td className="px-6 py-3 text-right">{r.liq}</td>
-                        <td className="px-6 py-3 text-right text-gray-400">{r.vol}</td>
-                        <td className="px-6 py-3 text-right"><Badge variant="primary">{r.alloc}</Badge></td>
+                        <td className="px-6 py-3 text-right">{tokenPrices[r.token] ? `$${tokenPrices[r.token].toFixed(2)}` : '...'}</td>
+                        <td className="px-6 py-3 text-right text-gray-400">—</td>
+                        <td className="px-6 py-3 text-right"><Badge variant="primary">Active</Badge></td>
                       </tr>
                     ))}
                   </tbody>
@@ -218,16 +310,16 @@ export default function StatsPage() {
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center p-4 bg-white/5 rounded-xl">
-                    <p className="text-gray-400 text-sm mb-1">Latency</p>
-                    <p className="text-3xl font-bold text-green-400">45ms</p>
+                    <p className="text-gray-400 text-sm mb-1">Endpoint</p>
+                    <p className="text-lg font-bold text-green-400 truncate">{USDTZ_CONFIG.rpc.private.url}</p>
                   </div>
                   <div className="text-center p-4 bg-white/5 rounded-xl">
-                    <p className="text-gray-400 text-sm mb-1">Uptime</p>
-                    <p className="text-3xl font-bold">99.98%</p>
+                    <p className="text-gray-400 text-sm mb-1">Network</p>
+                    <p className="text-3xl font-bold">BSC</p>
                   </div>
                   <div className="text-center p-4 bg-white/5 rounded-xl">
-                    <p className="text-gray-400 text-sm mb-1">Block</p>
-                    <p className="text-3xl font-bold">32.1M</p>
+                    <p className="text-gray-400 text-sm mb-1">Auth</p>
+                    <p className="text-3xl font-bold text-green-400">JWT</p>
                   </div>
                   <div className="text-center p-4 bg-white/5 rounded-xl">
                     <p className="text-gray-400 text-sm mb-1">Chain ID</p>
@@ -253,27 +345,6 @@ export default function StatsPage() {
                         <p className="text-sm text-gray-500 mt-0.5"><code>{ep.path}</code></p>
                       </div>
                       <Badge variant="success">Active</Badge>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </AnimatedSection>
-
-            <AnimatedSection delay={0.2}>
-              <Card>
-                <h2 className="text-xl font-bold mb-5">Benefits</h2>
-                <div className="grid md:grid-cols-3 gap-4">
-                  {[
-                    { icon: Zap, title: 'High Speed', desc: 'Sub-50ms response times', color: 'from-blue-400 to-cyan-400' },
-                    { icon: Shield, title: 'Secure', desc: 'JWT auth and rate limiting', color: 'from-purple-400 to-pink-400' },
-                    { icon: Server, title: 'Reliable', desc: '99.98% uptime with failover', color: 'from-orange-400 to-red-400' },
-                  ].map((b, i) => (
-                    <div key={i} className="text-center p-5 bg-white/5 rounded-xl">
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${b.color} bg-opacity-20 flex items-center justify-center mx-auto mb-4`}>
-                        <b.icon className="w-5 h-5" />
-                      </div>
-                      <h3 className="font-semibold mb-1">{b.title}</h3>
-                      <p className="text-sm text-gray-400">{b.desc}</p>
                     </div>
                   ))}
                 </div>

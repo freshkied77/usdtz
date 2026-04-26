@@ -11,15 +11,11 @@ import AnimatedSection from '@/components/ui/AnimatedSection'
 import ProgressBar from '@/components/ui/ProgressBar'
 import Badge from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
-
-const STATS = [
-  { label: 'USDTZ Price', value: '$1.00', change: '+0.01%', icon: <Coins className="w-5 h-5" /> },
-  { label: 'Total Supply', value: '$125M', icon: <Layers className="w-5 h-5" /> },
-  { label: 'Collateral', value: '$128.7M', change: '+2.5%', icon: <Shield className="w-5 h-5" /> },
-  { label: 'Total TVL', value: '$98.5M', change: '+1.8%', icon: <TrendingUp className="w-5 h-5" /> },
-  { label: 'Active Users', value: '45.2K', change: '+234', icon: <Globe className="w-5 h-5" /> },
-  { label: 'Average APY', value: '8.5%', icon: <Zap className="w-5 h-5" /> },
-]
+import { buildTokenList, fetchTokenPrices } from '@/lib/api/coingecko'
+import { useContractRead } from 'wagmi'
+import { ABIS } from '@/lib/abis'
+import { USDTZ_CONFIG } from '@/lib/config'
+import { formatEther } from 'viem'
 
 const FEATURES = [
   {
@@ -63,10 +59,76 @@ const AD_HOOKS = [
 
 export default function Home() {
   const [mounted, setMounted] = useState(false)
+  const [stats, setStats] = useState({
+    price: 1.0,
+    priceChange: 0,
+    totalSupply: 0,
+    collateral: 0,
+    collateralChange: 0,
+    tvl: 0,
+    tvlChange: 0,
+    users: 0,
+    apy: 0,
+  })
+  const [loading, setLoading] = useState(true)
+
+  // Fetch live TVL from contract
+  const { data: tvlData } = useContractRead({
+    address: USDTZ_CONFIG.contracts.poolManager as `0x${string}`,
+    abi: ABIS.PoolManager,
+    functionName: 'totalTVL',
+    watch: true,
+  })
+
+  // Fetch live collateral ratio
+  const { data: collateralRatioData } = useContractRead({
+    address: USDTZ_CONFIG.contracts.poolManager as `0x${string}`,
+    abi: ABIS.PoolManager,
+    functionName: 'getCollateralRatio',
+    watch: true,
+  })
 
   useEffect(() => {
     setMounted(true)
-  }, [])
+    
+    async function loadStats() {
+      try {
+        // Fetch USDTZ price from CoinGecko (or use peg price)
+        const prices = await fetchTokenPrices(['tether', 'binancecoin', 'ethereum'])
+        
+        setStats(prev => ({
+          ...prev,
+          price: 1.0,
+          priceChange: prices['tether']?.usd_24h_change || 0,
+          collateral: collateralRatioData ? Number(collateralRatioData) / 100 : 0,
+          tvl: tvlData ? Number(formatEther(tvlData)) : 0,
+        }))
+      } catch (error) {
+        console.error('Failed to load stats:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    loadStats()
+    
+    // Refresh stats every 30 seconds
+    const interval = setInterval(loadStats, 30000)
+    return () => clearInterval(interval)
+  }, [tvlData, collateralRatioData])
+
+  const formatUSD = (value: number) => {
+    if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`
+    if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`
+    if (value >= 1e3) return `$${(value / 1e3).toFixed(1)}K`
+    return `$${value.toFixed(2)}`
+  }
+
+  const formatNumber = (value: number) => {
+    if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`
+    if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`
+    return value.toFixed(0)
+  }
 
   return (
     <Layout>
@@ -119,12 +181,12 @@ export default function Home() {
             <div className="w-px h-8 bg-white/10" />
             <div className="text-center">
               <p className="text-xs text-gray-500 uppercase tracking-wider">TVL</p>
-              <p className="text-xl font-bold">$98.5M</p>
+              <p className="text-xl font-bold">{loading ? '...' : formatUSD(stats.tvl)}</p>
             </div>
             <div className="w-px h-8 bg-white/10" />
             <div className="text-center">
               <p className="text-xs text-gray-500 uppercase tracking-wider">APY</p>
-              <p className="text-xl font-bold text-green-400">8.5%</p>
+              <p className="text-xl font-bold text-green-400">{stats.apy}%</p>
             </div>
             <div className="w-px h-8 bg-white/10" />
             <div className="text-center">
@@ -137,263 +199,105 @@ export default function Home() {
         {/* AI Ad Hooks Section */}
         <AnimatedSection className="mb-12">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold mb-2">AI-Powered DeFi</h2>
-            <p className="text-gray-400">Machine learning protection for your assets</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-4">
-            {AD_HOOKS.map((hook, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-                className="cursor-pointer"
-                onClick={() => window.location.href = '/risk'}
-              >
-                <Card variant="interactive" className="text-center p-6">
-                <div className={cn(
-                  'w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center',
-                  i === 0 ? 'bg-gradient-to-br from-primary-500/20 to-orange-500/20' :
-                  i === 1 ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/20' :
-                  'bg-gradient-to-br from-blue-500/20 to-cyan-500/20'
-                )}>
-                  <hook.icon className={cn('w-7 h-7',
-                    i === 0 ? 'text-primary-400' : i === 1 ? 'text-green-400' : 'text-blue-400'
-                  )} />
-                </div>
-                <h3 className="text-lg font-bold mb-2">{hook.title}</h3>
-                <p className="text-sm text-gray-400 mb-4">{hook.desc}</p>
-                <Button variant="outline" size="sm">{hook.cta}</Button>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </AnimatedSection>
-
-        {/* Live Stats */}
-        <AnimatedSection className="mb-12">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {STATS.map((stat, i) => (
-              <StatCard
-                key={stat.label}
-                label={stat.label}
-                value={stat.value}
-                change={stat.change}
-                icon={stat.icon}
-              />
-            ))}
-          </div>
-        </AnimatedSection>
-
-        {/* Quick Actions */}
-        <AnimatedSection className="mb-12">
-          <div className="grid md:grid-cols-4 gap-4">
-            <Card variant="interactive" className="text-center p-6 cursor-pointer" onClick={() => window.location.href = '/swap'}>
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500/20 to-orange-500/20 flex items-center justify-center mx-auto mb-4">
-                <Zap className="w-6 h-6 text-primary-400" />
-              </div>
-              <h3 className="font-bold mb-1">Swap</h3>
-              <p className="text-xs text-gray-400">Instant token exchange</p>
-            </Card>
-            <Card variant="interactive" className="text-center p-6 cursor-pointer" onClick={() => window.location.href = '/bridge'}>
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center mx-auto mb-4">
-                <Globe className="w-6 h-6 text-cyan-400" />
-              </div>
-              <h3 className="font-bold mb-1">Bridge</h3>
-              <p className="text-xs text-gray-400">Cross-chain transfers</p>
-            </Card>
-            <Card variant="interactive" className="text-center p-6 cursor-pointer" onClick={() => window.location.href = '/farm'}>
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 flex items-center justify-center mx-auto mb-4">
-                <TrendingUp className="w-6 h-6 text-green-400" />
-              </div>
-              <h3 className="font-bold mb-1">Farm</h3>
-              <p className="text-xs text-gray-400">Earn up to 500% APY</p>
-            </Card>
-            <Card variant="interactive" className="text-center p-6 cursor-pointer" onClick={() => window.location.href = '/risk'}>
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-4">
-                <Brain className="w-6 h-6 text-purple-400" />
-              </div>
-              <h3 className="font-bold mb-1">AI Risk</h3>
-              <p className="text-xs text-gray-400">ML-powered analysis</p>
-            </Card>
-          </div>
-        </AnimatedSection>
-
-        {/* Mint / Redeem */}
-        <AnimatedSection className="mb-12">
-          <div className="grid lg:grid-cols-2 gap-6">
-            {/* Mint Card */}
-            <Card variant="highlight" padding="lg">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500/20 to-orange-500/20 flex items-center justify-center">
-                  <Coins className="w-5 h-5 text-primary-400" />
-                </div>
-                <h2 className="text-2xl font-bold">Mint USDTZ</h2>
-              </div>
-              <div className="space-y-4">
-                <div className="bg-white/5 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400">Amount</span>
-                    <span className="text-sm text-gray-400">Balance: 12.5 BNB</span>
-                  </div>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    className="w-full bg-transparent text-2xl font-bold outline-none placeholder:text-gray-600"
-                  />
-                </div>
-                <div className="flex items-center justify-between text-sm text-gray-400 px-1">
-                  <span>Fee: 0.25%</span>
-                  <span>Min Ratio: 150%</span>
-                </div>
-                <Button fullWidth size="lg" onClick={() => window.location.href = '/buy'}>
-                  Mint USDTZ
-                </Button>
-              </div>
-            </Card>
-
-            {/* Redeem Card */}
-            <Card variant="highlight" padding="lg">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-secondary-500/20 to-blue-500/20 flex items-center justify-center">
-                  <ArrowRight className="w-5 h-5 text-secondary-400" />
-                </div>
-                <h2 className="text-2xl font-bold">Redeem USDTZ</h2>
-              </div>
-              <div className="space-y-4">
-                <div className="bg-white/5 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400">Amount</span>
-                    <span className="text-sm text-gray-400">Balance: 50,000 USDTZ</span>
-                  </div>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    className="w-full bg-transparent text-2xl font-bold outline-none placeholder:text-gray-600"
-                  />
-                </div>
-                <div className="flex items-center justify-between text-sm text-gray-400 px-1">
-                  <span>Fee: 0.25%</span>
-                  <span>Min Ratio: 150%</span>
-                </div>
-                <Button variant="secondary" fullWidth size="lg" onClick={() => window.location.href = '/swap'}>
-                  Redeem
-                </Button>
-              </div>
-            </Card>
-          </div>
-        </AnimatedSection>
-
-        {/* Protocol Overview */}
-        <AnimatedSection className="mb-12">
-          <Card padding="lg">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">Protocol Overview</h2>
-              <Badge variant="success" className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                All Systems Operational
-              </Badge>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-              <div>
-                <p className="text-gray-400 text-sm mb-1">Total Value Locked</p>
-                <p className="text-2xl font-bold">$98,542,891</p>
-              </div>
-              <div>
-                <p className="text-gray-400 text-sm mb-1">24h Volume</p>
-                <p className="text-2xl font-bold">$12,458,234</p>
-              </div>
-              <div>
-                <p className="text-gray-400 text-sm mb-1">Collateral Ratio</p>
-                <p className="text-2xl font-bold text-primary-400">156.2%</p>
-              </div>
-              <div>
-                <p className="text-gray-400 text-sm mb-1">AI Confidence</p>
-                <p className="text-2xl font-bold text-secondary-400">98.7%</p>
-              </div>
-            </div>
-            <ProgressBar value={156.2} max={200} label="Global Collateral Health" size="md" />
-          </Card>
-        </AnimatedSection>
-
-        {/* How It Works */}
-        <AnimatedSection className="mb-12">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold mb-3">How It Works</h2>
-            <p className="text-gray-400">Three simple steps to get started with USDTZ</p>
+            <h2 className="text-2xl font-bold mb-3">Powered by AI</h2>
+            <p className="text-gray-400">Advanced machine learning protects your positions 24/7</p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
-            {FEATURES.map((feature, i) => (
-              <AnimatedSection key={feature.step} delay={i * 0.15}>
-                <Card variant="interactive" className="text-center h-full p-6">
-                  <div className={cn('w-14 h-14 rounded-2xl mx-auto mb-5 flex items-center justify-center', feature.color)}>
-                    <feature.icon className={cn('w-6 h-6', feature.iconColor)} />
-                  </div>
-                  <span className="text-xs font-bold text-primary-500/60 uppercase tracking-widest">{feature.step}</span>
-                  <h3 className="text-xl font-semibold mt-2 mb-3">{feature.title}</h3>
-                  <p className="text-gray-400 text-sm leading-relaxed">{feature.description}</p>
-                </Card>
-              </AnimatedSection>
+            {AD_HOOKS.map((hook, i) => (
+              <Card key={i} variant="interactive" className="text-center" onClick={() => window.location.href = '/risk'}>
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-500/20 to-secondary-500/20 flex items-center justify-center mx-auto mb-4">
+                  <hook.icon className="w-6 h-6 text-primary-400" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">{hook.title}</h3>
+                <p className="text-gray-400 mb-4">{hook.desc}</p>
+                <Button variant="outline" size="sm">{hook.cta}</Button>
+              </Card>
             ))}
           </div>
         </AnimatedSection>
 
-        {/* Supported Chains */}
-        <AnimatedSection className="mb-12">
-          <Card padding="lg" className="text-center">
-            <h2 className="text-2xl font-bold mb-2">Multi-Chain Support</h2>
-            <p className="text-gray-400 mb-8">USDTZ operates across multiple blockchain networks</p>
-            <div className="flex items-center justify-center gap-6 flex-wrap">
-              {CHAINS.map((chain) => (
-                <div key={chain.name} className="flex items-center gap-3 px-5 py-3 bg-white/5 rounded-xl border border-white/5">
-                  <div className={cn('w-8 h-8 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold text-white', chain.color)}>
-                    {chain.symbol}
-                  </div>
-                  <span className="font-medium">{chain.name}</span>
-                  {chain.name === 'Zedxion' && (
-                    <Badge variant="primary" className="text-xs">One-Sided</Badge>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
+        {/* Live Stats Grid */}
+        <AnimatedSection delay={0.1} className="mb-12">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <StatCard
+              label="USDTZ Price"
+              value="$1.00"
+              change={`+${stats.priceChange}%`}
+              icon={<Coins className="w-5 h-5" />}
+            />
+            <StatCard
+              label="Total Supply"
+              value={formatNumber(stats.totalSupply)}
+              icon={<Layers className="w-5 h-5" />}
+            />
+            <StatCard
+              label="Collateral"
+              value={formatUSD(stats.collateral)}
+              change={`+${stats.collateralChange}%`}
+              icon={<Shield className="w-5 h-5" />}
+            />
+            <StatCard
+              label="Total TVL"
+              value={formatUSD(stats.tvl)}
+              change={`+${stats.tvlChange}%`}
+              icon={<TrendingUp className="w-5 h-5" />}
+            />
+            <StatCard
+              label="Active Users"
+              value={formatNumber(stats.users)}
+              change="+234"
+              icon={<Globe className="w-5 h-5" />}
+            />
+            <StatCard
+              label="Average APY"
+              value={`${stats.apy}%`}
+              icon={<Zap className="w-5 h-5" />}
+            />
+          </div>
         </AnimatedSection>
 
-        {/* AI Protection CTA */}
-        <AnimatedSection className="mb-12">
-          <Card variant="highlight" padding="lg" className="bg-gradient-to-r from-primary-500/10 via-transparent to-secondary-500/10">
-            <div className="grid md:grid-cols-2 gap-8 items-center">
-              <div>
-                <Badge variant="primary" className="mb-4">AI-Powered</Badge>
-                <h2 className="text-3xl font-bold mb-4">Protect Your Portfolio with Machine Learning</h2>
-                <p className="text-gray-400 mb-6">
-                  Our AI continuously monitors your positions, predicts liquidation risks,
-                  and alerts you before it's too late. Join 45,000+ users protecting $98M+ with AI.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <Button onClick={() => window.location.href = '/risk'}>
-                    Get Free Risk Analysis
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                  <Button variant="secondary">
-                    Watch Demo
-                  </Button>
-                </div>
-              </div>
-              <div className="bg-white/5 rounded-2xl p-6 text-center">
-                <div className="text-6xl font-bold text-primary-400 mb-2">98.7%</div>
-                <p className="text-gray-400 mb-4">AI Prediction Accuracy</p>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="bg-white/5 rounded-xl p-3">
-                    <p className="text-2xl font-bold text-green-400">45K+</p>
-                    <p className="text-gray-500">Protected Users</p>
+        {/* Features */}
+        <AnimatedSection delay={0.2} className="mb-12">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold mb-3">How It Works</h2>
+            <p className="text-gray-400">Three simple steps to start earning with USDTZ</p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {FEATURES.map((feature) => (
+              <Card key={feature.step} variant="interactive" className="relative overflow-hidden">
+                <div className={cn('absolute inset-0 bg-gradient-to-br opacity-30', feature.color)} />
+                <div className="relative">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={cn('w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center', feature.iconColor)}>
+                      <feature.icon className="w-6 h-6" />
+                    </div>
+                    <span className="text-4xl font-bold text-white/10">{feature.step}</span>
                   </div>
-                  <div className="bg-white/5 rounded-xl p-3">
-                    <p className="text-2xl font-bold text-blue-400">$98M+</p>
-                    <p className="text-gray-500">Assets Protected</p>
-                  </div>
+                  <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
+                  <p className="text-gray-400">{feature.description}</p>
                 </div>
-              </div>
+              </Card>
+            ))}
+          </div>
+        </AnimatedSection>
+
+        {/* Multi-Chain Support */}
+        <AnimatedSection delay={0.3} className="mb-12">
+          <Card padding="lg">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold mb-2">Multi-Chain Support</h2>
+              <p className="text-gray-400">Deployed across major blockchain networks</p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              {CHAINS.map((chain) => (
+                <div key={chain.name} className="text-center">
+                  <div className={cn('w-16 h-16 rounded-2xl bg-gradient-to-br mx-auto mb-3 flex items-center justify-center', chain.color)}>
+                    <span className="text-lg font-bold text-white">{chain.symbol}</span>
+                  </div>
+                  <p className="font-semibold">{chain.name}</p>
+                  <Badge variant="primary" className="mt-2">Active</Badge>
+                </div>
+              ))}
             </div>
           </Card>
         </AnimatedSection>
@@ -444,14 +348,13 @@ export default function Home() {
                     <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                     <span className="text-green-400 text-sm font-medium">Peg Healthy</span>
                   </div>
-                  <span className="text-gray-500 text-sm">99.87% accuracy (30d)</span>
-                  <span className="text-gray-500 text-sm">47 rebase events</span>
+                  <span className="text-gray-500 text-sm">Chainlink Oracle Powered</span>
                 </div>
               </div>
               <div className="text-center">
                 <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Current Price</p>
-                <p className="text-4xl font-bold text-primary-400">$1.0012</p>
-                <p className="text-green-400 text-sm">+0.12%</p>
+                <p className="text-4xl font-bold text-primary-400">${stats.price.toFixed(4)}</p>
+                <p className="text-green-400 text-sm">{stats.priceChange >= 0 ? '+' : ''}{stats.priceChange.toFixed(2)}%</p>
               </div>
             </div>
           </Card>

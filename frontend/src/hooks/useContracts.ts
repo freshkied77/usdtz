@@ -118,7 +118,7 @@ export function useStabilizationStats() {
 // ---------- Cross-Chain Bridge ----------
 export function useBridgeChainConfig(chainId: number) {
   return useContractRead({
-    address: contracts.usdtz as `0x${string}`, // Bridge address needed
+    address: contracts.crossChainBridge as `0x${string}`,
     abi: ABIS.CrossChainBridge,
     functionName: 'getChainConfig',
     args: [BigInt(chainId)],
@@ -162,7 +162,7 @@ export function useLiquidityMiningPool(poolToken: string) {
 // ---------- Privacy Pool ----------
 export function usePrivacyAnonymitySet() {
   return useContractRead({
-    address: contracts.usdtz as `0x${string}`, // Privacy pool address needed
+    address: contracts.privacyPool as `0x${string}`,
     abi: ABIS.PrivacyPool,
     functionName: 'getAnonymitySet',
     watch: true,

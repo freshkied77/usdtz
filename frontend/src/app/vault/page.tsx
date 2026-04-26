@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { Landmark, Lock, Unlock } from 'lucide-react'
-import { useContractRead } from 'wagmi'
-import { formatEther } from 'viem'
+import { useContractRead, useAccount, usePublicClient, useWalletClient } from 'wagmi'
+import { formatEther, parseEther } from 'viem'
 import Layout from '@/components/Layout'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
@@ -20,6 +20,19 @@ import { ABIS } from '@/lib/abis'
 
 const LIQUIDITY_VAULT_ADDRESS = '0xdfbe58825699E42D786EBf9B7Ba8F6ab03C1C759' as const
 const USDTZ_ADDRESS = '0xF682dfB3A4742071c280E7A77f4aE6d4E8F86665' as const
+
+const ERC20_APPROVE_ABI = [
+  {
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    name: 'approve',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const
 
 // Chain IDs matching the UI
 const CHAINS = [
@@ -79,10 +92,81 @@ interface ChainData {
 }
 
 export default function VaultPage() {
+  const { address, isConnected } = useAccount()
+  const publicClient = usePublicClient()
+  const { data: walletClient } = useWalletClient()
   const [activeTab, setActiveTab] = useState('overview')
   const [selToken, setSelToken] = useState('USDTZ')
   const [selChain, setSelChain] = useState('9000')
   const [amount, setAmount] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [vaultError, setVaultError] = useState('')
+  const [vaultTxHash, setVaultTxHash] = useState<string | null>(null)
+
+  const handleVaultDeposit = async () => {
+    if (!amount || !address || !publicClient || !walletClient || !isConnected) return
+    setIsSubmitting(true)
+    setVaultError('')
+    setVaultTxHash(null)
+    try {
+      const depositAmount = parseEther(amount)
+      const tokenConfig = TOKENS_CONFIG.find(t => t.symbol === selToken)
+      if (!tokenConfig) return
+
+      const { request: approveReq } = await publicClient.simulateContract({
+        address: tokenConfig.address as `0x${string}`,
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [LIQUIDITY_VAULT_ADDRESS as `0x${string}`, depositAmount],
+        account: address,
+      })
+      await walletClient.writeContract(approveReq)
+
+      const { request } = await publicClient.simulateContract({
+        address: LIQUIDITY_VAULT_ADDRESS as `0x${string}`,
+        abi: ABIS.LiquidityVault,
+        functionName: 'deposit',
+        args: [tokenConfig.address as `0x${string}`, depositAmount, BigInt(selChain)],
+        account: address,
+      })
+      const hash = await walletClient.writeContract(request)
+      setVaultTxHash(hash)
+      setAmount('')
+    } catch (err: any) {
+      console.error('Vault deposit failed:', err)
+      setVaultError(err?.shortMessage || 'Deposit failed — check balance and allowance')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleVaultWithdraw = async () => {
+    if (!amount || !address || !publicClient || !walletClient || !isConnected) return
+    setIsSubmitting(true)
+    setVaultError('')
+    setVaultTxHash(null)
+    try {
+      const withdrawAmount = parseEther(amount)
+      const tokenConfig = TOKENS_CONFIG.find(t => t.symbol === selToken)
+      if (!tokenConfig) return
+
+      const { request } = await publicClient.simulateContract({
+        address: LIQUIDITY_VAULT_ADDRESS as `0x${string}`,
+        abi: ABIS.LiquidityVault,
+        functionName: 'withdraw',
+        args: [tokenConfig.address as `0x${string}`, withdrawAmount, BigInt(selChain)],
+        account: address,
+      })
+      const hash = await walletClient.writeContract(request)
+      setVaultTxHash(hash)
+      setAmount('')
+    } catch (err: any) {
+      console.error('Vault withdraw failed:', err)
+      setVaultError(err?.shortMessage || 'Withdraw failed — check available balance')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   // Get vault address for config
   const vaultAddress = LIQUIDITY_VAULT_ADDRESS
@@ -499,8 +583,23 @@ export default function VaultPage() {
                     </div>
                   </div>
 
-                  <Button fullWidth size="lg">
-                    {activeTab === 'deposit' ? 'Deposit to Vault' : 'Withdraw from Vault'}
+                  {vaultError && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">{vaultError}</div>
+                  )}
+                  {vaultTxHash && (
+                    <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl text-sm">
+                      <p className="text-green-400 font-medium">Transaction submitted!</p>
+                      <p className="text-xs text-gray-400 mt-1 font-mono break-all">Tx: {vaultTxHash}</p>
+                    </div>
+                  )}
+                  <Button
+                    fullWidth
+                    size="lg"
+                    onClick={activeTab === 'deposit' ? handleVaultDeposit : handleVaultWithdraw}
+                    loading={isSubmitting}
+                    disabled={!isConnected || !amount || parseFloat(amount) <= 0}
+                  >
+                    {!isConnected ? 'Connect Wallet' : activeTab === 'deposit' ? 'Deposit to Vault' : 'Withdraw from Vault'}
                   </Button>
                 </div>
               </Card>
