@@ -159,26 +159,34 @@ export default function BridgePage() {
   )
 
   const handleBridge = async () => {
-    if (!selectedPair || !amount || !address || !publicClient || !walletClient || !isConnected) return
+    if (!selectedPair || !amount || !address || !publicClient || !walletClient || !isConnected) {
+      setBridgeError('Please connect your wallet and select a bridge pair')
+      return
+    }
     setIsBridging(true)
     setTxHash(null)
     setBridgeError('')
     try {
-      const destChainId = selectedChain === 'zedxion' ? BigInt(9000) : BigInt(56)
+      const chain = CHAINS.find(c => c.id === selectedChain)
+      const destChainId = BigInt(chain?.chainId ?? 9000)
       const bridgeAmount = parseEther(amount)
 
-      // Approve USDTZ spend by bridge contract
-      const { request: approveReq } = await publicClient.simulateContract({
-        address: USDTZ_ADDRESS,
-        abi: ERC20_APPROVE_ABI,
-        functionName: 'approve',
-        args: [CROSS_CHAIN_BRIDGE_ADDRESS, bridgeAmount],
-        account: address,
-      })
-      const approveTx = await walletClient.writeContract(approveReq)
-      await publicClient.waitForTransactionReceipt({ hash: approveTx })
+      // Step 1: Approve USDTZ spend
+      try {
+        const { request: approveReq } = await publicClient.simulateContract({
+          address: USDTZ_ADDRESS,
+          abi: ERC20_APPROVE_ABI,
+          functionName: 'approve',
+          args: [CROSS_CHAIN_BRIDGE_ADDRESS, bridgeAmount],
+          account: address,
+        })
+        const approveTx = await walletClient.writeContract(approveReq)
+        await publicClient.waitForTransactionReceipt({ hash: approveTx })
+      } catch (approveErr: any) {
+        throw new Error(`Approval failed: ${approveErr?.shortMessage || approveErr?.message || 'Unknown error'}`)
+      }
 
-      // Call initiateBridge(token, amount, destinationChainId, recipient)
+      // Step 2: Call initiateBridge(token, amount, destinationChainId, recipient)
       const { request } = await publicClient.simulateContract({
         address: CROSS_CHAIN_BRIDGE_ADDRESS,
         abi: ABIS.CrossChainBridge,
@@ -190,7 +198,16 @@ export default function BridgePage() {
       setTxHash(hash)
     } catch (error: any) {
       console.error('Bridge failed:', error)
-      setBridgeError(error?.shortMessage || error?.message || 'Bridge failed — check balance and try again')
+      const msg = error?.shortMessage || error?.message || ''
+      if (msg.includes('insufficient') || msg.includes('balance')) {
+        setBridgeError('Insufficient USDTZ balance for this bridge amount')
+      } else if (msg.includes('Chain not active') || msg.includes('not active')) {
+        setBridgeError('This bridge route is not active yet — try a different chain')
+      } else if (msg.includes('Approval failed')) {
+        setBridgeError(msg)
+      } else {
+        setBridgeError(msg || 'Bridge failed — the bridge contract may not be configured for this route yet')
+      }
     } finally {
       setIsBridging(false)
     }
