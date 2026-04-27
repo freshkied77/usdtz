@@ -35,26 +35,9 @@ const BRIDGE_PAIRS = [
   { from: 'ZEDX', to: 'BNB', type: 'one-sided' },
 ]
 
-interface ChainConfig {
-  chainId: bigint
-  name: string
-  bridgeAddress: string
-  gasFee: bigint
-  minAmount: bigint
-  maxAmount: bigint
-  transferTimeout: bigint
-  active: boolean
-}
-
-interface ChainLiquidity {
-  chainId: bigint
-  name: string
-  totalBalance: bigint
-  availableBalance: bigint
-  lockedBalance: bigint
-  lastRebalance: bigint
-  active: boolean
-}
+// Contract returns tuples, not objects — access by index
+// chainLiquidity: [chainId, name, totalBalance, availableBalance, lockedBalance, lastRebalance, active]
+// getChainConfig returns similar tuple
 
 function formatUsd(value: bigint | string | number): string {
   const num = typeof value === 'string' || typeof value === 'number' ? Number(value) : Number(formatEther(value))
@@ -91,58 +74,89 @@ export default function BridgePage() {
   const [txHash, setTxHash] = useState<string | null>(null)
   const [bridgeError, setBridgeError] = useState('')
 
-  // Read BSC chain config (56)
-  const { data: bscChainConfig, isLoading: bscConfigLoading } = useContractRead({
-    address: CROSS_CHAIN_BRIDGE_ADDRESS as `0x${string}`,
+  // Read chain configs — results are tuples, access safely
+  const { data: bscChainConfigRaw } = useContractRead({
+    address: CROSS_CHAIN_BRIDGE_ADDRESS,
     abi: ABIS.CrossChainBridge,
     functionName: 'getChainConfig',
     args: [BigInt(56)],
-    enabled: true,
-  }) as { data: ChainConfig | undefined, isLoading: boolean }
+  })
 
-  // Read Zedxion chain config (9000)
-  const { data: zedxionChainConfig, isLoading: zedxionConfigLoading } = useContractRead({
-    address: CROSS_CHAIN_BRIDGE_ADDRESS as `0x${string}`,
+  const { data: zedxionChainConfigRaw } = useContractRead({
+    address: CROSS_CHAIN_BRIDGE_ADDRESS,
     abi: ABIS.CrossChainBridge,
     functionName: 'getChainConfig',
     args: [BigInt(9000)],
-    enabled: true,
-  }) as { data: ChainConfig | undefined, isLoading: boolean }
+  })
 
-  // Read BSC chain liquidity from vault
-  const { data: bscLiquidity, isLoading: bscLiquidityLoading } = useContractRead({
-    address: LIQUIDITY_VAULT_ADDRESS as `0x${string}`,
+  // Read chain liquidity — results are tuples: [chainId, name, totalBalance, availableBalance, lockedBalance, lastRebalance, active]
+  const { data: bscLiquidityRaw } = useContractRead({
+    address: LIQUIDITY_VAULT_ADDRESS,
     abi: ABIS.LiquidityVault,
     functionName: 'chainLiquidity',
     args: [BigInt(56)],
-    enabled: true,
-  }) as { data: ChainLiquidity | undefined, isLoading: boolean }
+  })
 
-  // Read Zedxion chain liquidity from vault
-  const { data: zedxionLiquidity, isLoading: zedxionLiquidityLoading } = useContractRead({
-    address: LIQUIDITY_VAULT_ADDRESS as `0x${string}`,
+  const { data: zedxionLiquidityRaw } = useContractRead({
+    address: LIQUIDITY_VAULT_ADDRESS,
     abi: ABIS.LiquidityVault,
     functionName: 'chainLiquidity',
     args: [BigInt(9000)],
-    enabled: true,
-  }) as { data: ChainLiquidity | undefined, isLoading: boolean }
+  })
 
-  // Get total liquidity
+  const safeBigInt = (val: unknown): bigint => {
+    if (typeof val === 'bigint') return val
+    if (typeof val === 'number') return BigInt(val)
+    return BigInt(0)
+  }
+
+  const parseLiquidity = (raw: unknown) => {
+    if (!raw || !Array.isArray(raw) || raw.length < 7) return null
+    return {
+      chainId: safeBigInt(raw[0]),
+      name: String(raw[1] || ''),
+      totalBalance: safeBigInt(raw[2]),
+      availableBalance: safeBigInt(raw[3]),
+      lockedBalance: safeBigInt(raw[4]),
+      lastRebalance: safeBigInt(raw[5]),
+      active: Boolean(raw[6]),
+    }
+  }
+
+  const bscLiquidity = parseLiquidity(bscLiquidityRaw)
+  const zedxionLiquidity = parseLiquidity(zedxionLiquidityRaw)
+
   const totalLiquidity = useMemo(() => {
     const bsc = bscLiquidity ? Number(formatEther(bscLiquidity.totalBalance)) : 0
     const zedxion = zedxionLiquidity ? Number(formatEther(zedxionLiquidity.totalBalance)) : 0
     return bsc + zedxion
   }, [bscLiquidity, zedxionLiquidity])
 
-  // Calculate 24h volume from chain configs (currentVolume field)
   const volume24h = useMemo(() => {
-    const bsc = bscChainConfig?.gasFee ? Number(bscChainConfig.gasFee) / 1e18 * 100 : 0
-    const zedxion = zedxionChainConfig?.gasFee ? Number(zedxionChainConfig.gasFee) / 1e18 * 100 : 0
-    return bsc + zedxion
-  }, [bscChainConfig, zedxionChainConfig])
+    const parseGasFee = (raw: unknown) => {
+      if (!raw || !Array.isArray(raw)) return 0
+      const fee = raw[3] ?? raw[2]
+      return fee ? Number(safeBigInt(fee)) / 1e18 * 100 : 0
+    }
+    return parseGasFee(bscChainConfigRaw) + parseGasFee(zedxionChainConfigRaw)
+  }, [bscChainConfigRaw, zedxionChainConfigRaw])
 
-  const selectedChainConfig = selectedChain === 'bsc' ? bscChainConfig : selectedChain === 'zedxion' ? zedxionChainConfig : undefined
-  const selectedChainLiquidity = selectedChain === 'bsc' ? bscLiquidity : selectedChain === 'zedxion' ? zedxionLiquidity : undefined
+  const selectedChainLiquidity = selectedChain === 'bsc' ? bscLiquidity : selectedChain === 'zedxion' ? zedxionLiquidity : null
+
+  const parseChainConfig = (raw: unknown) => {
+    if (!raw || !Array.isArray(raw) || raw.length < 5) return null
+    return {
+      active: Boolean(raw[0] ?? false),
+      gasFee: safeBigInt(raw[1]),
+      minAmount: safeBigInt(raw[2]),
+      maxAmount: safeBigInt(raw[3]),
+      transferTimeout: safeBigInt(raw[4]),
+    }
+  }
+
+  const selectedChainConfig = parseChainConfig(
+    selectedChain === 'bsc' ? bscChainConfigRaw : selectedChain === 'zedxion' ? zedxionChainConfigRaw : undefined
+  )
 
   const handleBridge = async () => {
     if (!selectedPair || !amount || !address || !publicClient || !walletClient || !isConnected) return
@@ -245,7 +259,7 @@ export default function BridgePage() {
               <h2 className="text-lg font-bold mb-4">Select Destination</h2>
               <div className="space-y-3">
                 {CHAINS.map((chain) => {
-                  const chainConfig = chain.id === 'bsc' ? bscChainConfig : chain.id === 'zedxion' ? zedxionChainConfig : undefined
+                  const chainConfig = parseChainConfig(chain.id === 'bsc' ? bscChainConfigRaw : chain.id === 'zedxion' ? zedxionChainConfigRaw : undefined)
                   const chainLiquidityData = chain.id === 'bsc' ? bscLiquidity : chain.id === 'zedxion' ? zedxionLiquidity : undefined
 
                   return (
@@ -500,7 +514,7 @@ export default function BridgePage() {
             <h2 className="text-lg font-bold mb-4">Multi-Chain Support</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {CHAINS.map((chain) => {
-                const chainConfig = chain.id === 'bsc' ? bscChainConfig : chain.id === 'zedxion' ? zedxionChainConfig : undefined
+                const chainConfig = parseChainConfig(chain.id === 'bsc' ? bscChainConfigRaw : chain.id === 'zedxion' ? zedxionChainConfigRaw : undefined)
                 const chainLiquidityData = chain.id === 'bsc' ? bscLiquidity : chain.id === 'zedxion' ? zedxionLiquidity : undefined
                 const explorerUrl = chain.id === 'bsc' ? 'https://bscscan.com' : chain.id === 'zedxion' ? 'https://explorer.zedxion.xyz' : chain.id === 'ethereum' ? 'https://etherscan.io' : 'https://polygonscan.com'
 
